@@ -15,6 +15,7 @@
 .vs/
 
 # Exclude temporary folders
+__pycache__/
 *.egg-info/
 build/
 build_cmake/
@@ -26,3 +27,12 @@ build_cmake/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Exclude copied and generated artifacts for editable python package installation
+python/LICENSE
+python/cmake/
+python/mujoco/enum_traits.h
+python/mujoco/function_traits.h
+python/mujoco/include/
+python/mujoco/libmujoco.so*
+python/mujoco/libmujoco_nogl.so*
