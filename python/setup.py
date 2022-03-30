@@ -63,12 +63,11 @@ def get_mujoco_lib_pattern():
 
 def get_external_lib_patterns():
   if platform.system() == 'Windows':
-    return ['mujoco.dll']
+    return ['mujoco.dll', 'mjsimulate.dll']
   elif platform.system() == 'Darwin':
-    return ['libmujoco.*.dylib']
+    return ['libmujoco.*.dylib', 'libmjsimulate.*.dylib']
   else:
-    return ['libmujoco.so.*']
-
+    return ['libmujoco.so.*', 'libmjsimulate.so*']
 
 def start_and_end(iterable):
   it = iter(iterable)
@@ -293,6 +292,7 @@ setup(
         CMakeExtension('mujoco._functions'),
         CMakeExtension('mujoco._render'),
         CMakeExtension('mujoco._rollout'),
+        CMakeExtension('mujoco._simulate'),
         CMakeExtension('mujoco._structs'),
     ],
     python_requires='>=3.7',
@@ -319,6 +319,7 @@ setup(
                     'libmujoco*.so.*',
                     'mujoco.dll',
                     'include/mujoco/*.h',
+                    'libmjsimulate*.so*',
                 ]),
     },
 )
