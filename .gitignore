@@ -36,3 +36,4 @@ python/mujoco/function_traits.h
 python/mujoco/include/
 python/mujoco/libmujoco.so*
 python/mujoco/libmujoco_nogl.so*
+python/mujoco/libmjsimulate.so*

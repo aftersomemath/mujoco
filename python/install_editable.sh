@@ -52,4 +52,4 @@ then
     rm -r mujoco/include
 fi
 
-python -m pip install -e .
+python -m pip install --verbose -e .
