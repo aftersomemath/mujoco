@@ -54,7 +54,7 @@ int nwarmup = 3;            // center point repetitions to improve warmstart
 int nepoch = 20;            // number of timing epochs
 int nstep = 500;            // number of simulation steps per epoch
 double eps = 1e-6;          // finite-difference epsilon
-
+bool print_jacobians = false; // Whether or not to print the jacobians as a table
 
 // worker function for parallel finite-difference computation of derivatives
 void worker(const mjModel* m, const mjData* dmain, mjData* d, int id) {
@@ -278,6 +278,28 @@ void checkderiv(const mjModel* m, mjData* d, mjtNum error[7]) {
   mjFREESTACK;
 }
 
+void print_matrix(mjModel* m, mjtNum* M) {
+  std::printf("                ");
+  for (int i = 0; i < m->nv; i++) {
+    int jid = m->dof_jntid[i];
+    std::printf("%-14s ", mj_id2name(m, mjOBJ_JOINT, jid));
+  }
+  std::printf("\n");
+
+  for (int i = 0; i < m->nv; i++) {
+    int jid = m->dof_jntid[i];
+    std::printf("%-14s ", mj_id2name(m, mjOBJ_JOINT, jid));
+    for (int j = 0; j < m->nv; j++) {
+      mjtNum num = M[i*m->nv+j];
+      if (num >= 0) {
+        std::printf(" %12E, ", num);
+      } else {
+        std::printf("%12E, ", num);
+      }
+    }
+    std::printf("\n");
+  }
+}
 
 // main function
 int main(int argc, char** argv) {
@@ -415,6 +437,38 @@ int main(int argc, char** argv) {
     for (int ie=0; ie<8; ie++) {
       merror[ie] += error[epoch][ie];
     }
+  }
+
+  if (print_jacobians) {
+    // print matrices
+    std::printf("Jacobians\n");
+    std::printf("------------------------------------\n");
+
+    int nv = m->nv;
+
+    std::printf("G0 dinv/dpos\n");
+    print_matrix(m, deriv);
+    std::printf("\n");
+
+    std::printf("G1 dinv/dvel\n");
+    print_matrix(m, deriv + nv*nv);
+    std::printf("\n");
+
+    std::printf("G2 dinv/dacc\n");
+    print_matrix(m, deriv + 2*nv*nv);
+    std::printf("\n");
+
+    std::printf("F0 dacc/dpos\n");
+    print_matrix(m, deriv + 3*nv*nv);
+    std::printf("\n");
+
+    std::printf("F1 dacc/dvel\n");
+    print_matrix(m, deriv + 4*nv*nv);
+    std::printf("\n");
+
+    std::printf("F2 dacc/dfrc\n");
+    print_matrix(m, deriv + 5*nv*nv);
+    std::printf("\n");
   }
 
   // print sizes, timing, accuracy
