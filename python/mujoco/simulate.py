@@ -22,6 +22,7 @@ import numpy as np
 
 import ctypes
 import math
+import threading
 import time
 
 class Simulate(_simulate.Simulate):
@@ -84,7 +85,18 @@ def load_and_step_model(m, d, simulate, filename, preload_callback=None, load_ca
 
   return mnew, dnew, loadError
 
-def run_physics_loop(simulate, preload_callback=None, load_callback=None, m=None, d=None, ctrlnoise=None):
+def run_physics_loop(simulate, preload_callback=None, load_callback=None, file=None):
+  # request loadmodel if file given (otherwise drag-and-drop)
+  if file is not None:
+    m, d, loadError = load_and_step_model(None, None, simulate, file, preload_callback, load_callback)
+    ctrlnoise = np.zeros((m.nu,))
+    if loadError is not None:
+      simulate.loadError = loadError
+  else:
+    m = None
+    d = None
+    ctrlnoise = None
+
   # constants
   syncmisalign = 0.1    # maximum time mis-alignment before re-sync
   refreshfactor = 0.7   # fraction of refresh available for simulation
@@ -95,7 +107,6 @@ def run_physics_loop(simulate, preload_callback=None, load_callback=None, m=None
 
   # run until asked to exit
   while not simulate.exitrequest:
-
     if simulate.droploadrequest:
       m_, d_, loadError = load_and_step_model(m, d, simulate, simulate.dropfilename,
                                               preload_callback, load_callback)
@@ -202,25 +213,12 @@ def run_simulate_and_physics(file=None, preload_callback=None, load_callback=Non
   if not glfw.init():
     raise mujoco.FatalError('could not initialize GLFW')
 
+  # if m is not None:
+  physics_thread = threading.Thread(target=lambda: run_physics_loop(simulate, preload_callback=preload_callback, load_callback=load_callback, file=file))
+  physics_thread.start()
+
   # start simulation thread (this creates the UI)
-  simulate.startthread()
-
-  # request loadmodel if file given (otherwise drag-and-drop)
-  m = None
-  if file is not None:
-    m, d, loadError = load_and_step_model(None, None, simulate, file, preload_callback, load_callback)
-    if loadError is not None:
-      simulate.loadError = loadError
-
-  if m is not None:
-    run_physics_loop(simulate,
-      preload_callback=preload_callback,
-      load_callback=load_callback,
-      m=m, d=d, ctrlnoise=np.zeros((m.nu,)))
-  else:
-    run_physics_loop(simulate, preload_callback=preload_callback, load_callback=load_callback)
-
-  # If simulate loop exited its time to stop the UI
-  simulate.stopthread()
+  simulate.renderloop()
+  physics_thread.join()
 
   glfw.terminate()

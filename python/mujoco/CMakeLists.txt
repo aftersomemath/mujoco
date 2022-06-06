@@ -119,7 +119,7 @@ endif()
 # ==================== MJSIMULATE LIBRARY ==========================================
 if(NOT TARGET mjsimulate)
   find_library(MJSIMULATE_LIBRARY mjsimulate mjsimulate HINTS ${MUJOCO_LIBRARY_DIR} REQUIRED)
-  find_path(MJSIMULATE_INCLUDE simulate.h uitools.h array_safety.h HINTS ${MUJOCO_INCLUDE_DIR} REQUIRED)
+  find_path(MJSIMULATE_INCLUDE mujoco/simulate.h mujoco/uitools.h mujoco/array_safety.h HINTS ${MUJOCO_INCLUDE_DIR} REQUIRED)
   message("MuJoCo Simulate is at ${MJSIMULATE_LIBRARY}")
   message("MuJoCo Simulate headers are at ${MJSIMULATE_INCLUDE}")
   add_library(mjsimulate SHARED IMPORTED)

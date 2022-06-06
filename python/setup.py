@@ -67,7 +67,7 @@ def get_external_lib_patterns():
   elif platform.system() == 'Darwin':
     return ['libmujoco.*.dylib', 'libmjsimulate.*.dylib']
   else:
-    return ['libmujoco.so.*', 'libmjsimulate.so.*']
+    return ['libmujoco.so.*', 'libmjsimulate.so*']
 
 def start_and_end(iterable):
   it = iter(iterable)

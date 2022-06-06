@@ -19,8 +19,8 @@
 #include <sstream>
 #include <string>
 
-#include <mujoco.h>
-#include <simulate.h>
+#include <mujoco/mujoco.h>
+#include <mujoco/simulate.h>
 #include "raw.h"
 #include "structs.h"
 #include <pybind11/buffer_info.h>
@@ -46,8 +46,11 @@ PYBIND11_MODULE(_simulate, pymodule) {
 
   py::class_<mujoco::raw::Simulate>(pymodule, "Simulate")
     .def(py::init<>())
-    .def("startthread", &mujoco::raw::Simulate::startthread)
-    .def("stopthread", &mujoco::raw::Simulate::stopthread)
+    .def("renderloop",
+          [](mujoco::raw::Simulate& simulate) {
+            simulate.renderloop();
+          },
+      py::call_guard<py::gil_scoped_release>())
     .def("load",
           [](mujoco::raw::Simulate& simulate, std::string filename, const MjModelWrapper& m, MjDataWrapper& d, bool delete_old_m_d) {
             const raw::MjModel* m_ptr = m.get();
