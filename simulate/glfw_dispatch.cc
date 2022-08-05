@@ -66,6 +66,7 @@ const struct Glfw& Glfw(void* dlhandle) {
     }
     #define mjGLFW_RESOLVE_SYMBOL(func) \
       glfw.func = reinterpret_cast<decltype(glfw.func)>(dlsym(dlhandle, #func))
+
   #endif
 #else
   #define mjGLFW_RESOLVE_SYMBOL(func) glfw.func = &::func
@@ -80,6 +81,7 @@ const struct Glfw& Glfw(void* dlhandle) {
 
     // go/keep-sorted start
     mjGLFW_INITIALIZE_SYMBOL(glfwCreateWindow);
+    mjGLFW_INITIALIZE_SYMBOL(glfwDestroyWindow);
     mjGLFW_INITIALIZE_SYMBOL(glfwGetCursorPos);
     mjGLFW_INITIALIZE_SYMBOL(glfwGetFramebufferSize);
     mjGLFW_INITIALIZE_SYMBOL(glfwGetKey);
@@ -114,10 +116,6 @@ const struct Glfw& Glfw(void* dlhandle) {
     // go/keep-sorted end
 
 #undef mjGLFW_INITIALIZE_SYMBOL
-
-#if defined(mjGLFW_DYNAMIC_SYMBOLS) && !defined(_MSC_VER)
-    dlclose(dlhandle);
-#endif
 
     return glfw;
   }();

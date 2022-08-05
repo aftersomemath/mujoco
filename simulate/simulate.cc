@@ -24,7 +24,8 @@
 #include <thread>
 
 #include <GLFW/glfw3.h>
-#include "lodepng.h"
+#include <lodepng.h>
+
 #include <mujoco/mjmodel.h>
 #include <mujoco/mjvisualize.h>
 #include <mujoco/mjxmacro.h>
@@ -55,6 +56,10 @@ using ::mujoco::Glfw;
 
 const int maxgeom = 5000;            // preallocated geom array in mjvScene
 const double zoom_increment = 0.02;  // ratio of one click-wheel zoom increment to vertical extent
+const double syncMisalign = 0.1;     // maximum time mis-alignment before re-sync (simulate seconds)
+const double simRefreshFraction = 0.7;    // fraction of refresh available for simulation
+const int kErrorLength = 1024;            // load error string length
+
 
 // section ids
 enum {
@@ -928,7 +933,7 @@ void copykey(mj::Simulate* sim) {
   mju::strcat_arr(clipboard, "'/>");
 
   // copy to clipboard
-  Glfw().glfwSetClipboardString(sim->window, clipboard);
+  Glfw().glfwSetClipboardString(reinterpret_cast<GLFWwindow*>(sim->window), clipboard);
 }
 
 // millisecond timer, for MuJoCo built-in profiler
@@ -968,7 +973,7 @@ void copycamera(mj::Simulate* sim) {
                    camera[0].up[0], camera[0].up[1], camera[0].up[2]);
 
   // copy spec into clipboard
-  Glfw().glfwSetClipboardString(sim->window, clipboard);
+  Glfw().glfwSetClipboardString(reinterpret_cast<GLFWwindow*>(sim->window), clipboard);
 }
 
 // update UI 0 when MuJoCo structures change (except for joint sliders)
@@ -1029,7 +1034,7 @@ void uiLayout(mjuiState* state) {
   // rect 0: entire framebuffer
   rect[0].left = 0;
   rect[0].bottom = 0;
-  Glfw().glfwGetFramebufferSize(sim->window, &rect[0].width, &rect[0].height);
+  Glfw().glfwGetFramebufferSize(reinterpret_cast<GLFWwindow*>(sim->window), &rect[0].width, &rect[0].height);
 
   // rect 1: UI 0
   rect[1].left = 0;
@@ -1122,21 +1127,24 @@ void uiEvent(mjuiState* state) {
         break;
 
       case 9:             // Full screen
-        if (Glfw().glfwGetWindowMonitor(sim->window)) {
+        if (Glfw().glfwGetWindowMonitor(reinterpret_cast<GLFWwindow*>(sim->window))) {
           // restore window from saved data
-          Glfw().glfwSetWindowMonitor(sim->window, nullptr, sim->windowpos[0], sim->windowpos[1],
+          Glfw().glfwSetWindowMonitor(reinterpret_cast<GLFWwindow*>(sim->window), nullptr,
+                                      sim->windowpos[0], sim->windowpos[1],
                                       sim->windowsize[0], sim->windowsize[1], 0);
         }
 
         // currently windowed: switch to full screen
         else {
           // save window data
-          Glfw().glfwGetWindowPos(sim->window, sim->windowpos, sim->windowpos+1);
-          Glfw().glfwGetWindowSize(sim->window, sim->windowsize, sim->windowsize+1);
+          Glfw().glfwGetWindowPos(reinterpret_cast<GLFWwindow*>(sim->window), sim->windowpos, sim->windowpos+1);
+          Glfw().glfwGetWindowSize(reinterpret_cast<GLFWwindow*>(sim->window), sim->windowsize, sim->windowsize+1);
 
           // switch
-          Glfw().glfwSetWindowMonitor(sim->window, Glfw().glfwGetPrimaryMonitor(), 0, 0,
-                                      sim->vmode.width, sim->vmode.height, sim->vmode.refreshRate);
+          Glfw().glfwSetWindowMonitor(reinterpret_cast<GLFWwindow*>(sim->window), Glfw().glfwGetPrimaryMonitor(), 0, 0,
+                                      reinterpret_cast<const GLFWvidmode*>(sim->vmode)->width,
+                                      reinterpret_cast<const GLFWvidmode*>(sim->vmode)->height,
+                                      reinterpret_cast<const GLFWvidmode*>(sim->vmode)->refreshRate);
         }
 
         // reinstante vsync, just in case
@@ -1149,8 +1157,8 @@ void uiEvent(mjuiState* state) {
       }
 
       // modify UI
-      uiModify(sim->window, &sim->ui0, state, &sim->con);
-      uiModify(sim->window, &sim->ui1, state, &sim->con);
+      uiModify(reinterpret_cast<GLFWwindow*>(sim->window), &sim->ui0, state, &sim->con);
+      uiModify(reinterpret_cast<GLFWwindow*>(sim->window), &sim->ui1, state, &sim->con);
     }
 
     // simulation section
@@ -1257,7 +1265,7 @@ void uiEvent(mjuiState* state) {
         sim->ui1.nsect = SECT_JOINT;
         makejoint(sim, sim->ui1.sect[SECT_JOINT].state);
         sim->ui1.nsect = NSECT1;
-        uiModify(sim->window, &sim->ui1, state, &sim->con);
+        uiModify(reinterpret_cast<GLFWwindow*>(sim->window), &sim->ui1, state, &sim->con);
       }
 
       // remake control section if actuator group changed
@@ -1265,7 +1273,7 @@ void uiEvent(mjuiState* state) {
         sim->ui1.nsect = SECT_CONTROL;
         makecontrol(sim, sim->ui1.sect[SECT_CONTROL].state);
         sim->ui1.nsect = NSECT1;
-        uiModify(sim->window, &sim->ui1, state, &sim->con);
+        uiModify(reinterpret_cast<GLFWwindow*>(sim->window), &sim->ui1, state, &sim->con);
       }
     }
 
@@ -1568,11 +1576,9 @@ void Simulate::applyforceperturbations() {
 //------------------------- Tell the render thread to load a file and wait -------------------------
 void Simulate::load(const char* file,
                     mjModel* mnew,
-                    mjData* dnew,
-                    bool delete_old_m_d) {
+                    mjData* dnew) {
   this->mnew = mnew;
   this->dnew = dnew;
-  this->delete_old_m_d = delete_old_m_d;
   mju::strcpy_arr(this->filename, file);
 
   {
@@ -1588,16 +1594,6 @@ void Simulate::load(const char* file,
 
 //------------------------------------- load mjb or xml model --------------------------------------
 void Simulate::loadmodel() {
-  if (this->delete_old_m_d) {
-    // delete old model if requested
-    if (this->d) {
-      mj_deleteData(d);
-    }
-    if (this->m) {
-      mj_deleteModel(m);
-    }
-  }
-
   this->m = this->mnew;
   this->d = this->dnew;
 
@@ -1623,7 +1619,7 @@ void Simulate::loadmodel() {
   if (this->window && this->m->names) {
     char title[200] = "Simulate : ";
     mju::strcat_arr(title, this->m->names);
-    Glfw().glfwSetWindowTitle(this->window, title);
+    Glfw().glfwSetWindowTitle(reinterpret_cast<GLFWwindow*>(this->window), title);
   }
 
   // set keyframe range and divisions
@@ -1635,8 +1631,8 @@ void Simulate::loadmodel() {
   makesections(this);
 
   // full ui update
-  uiModify(this->window, &this->ui0, &this->uistate, &this->con);
-  uiModify(this->window, &this->ui1, &this->uistate, &this->con);
+  uiModify(reinterpret_cast<GLFWwindow*>(this->window), &this->ui0, &this->uistate, &this->con);
+  uiModify(reinterpret_cast<GLFWwindow*>(this->window), &this->ui1, &this->uistate, &this->con);
   updatesettings(this);
 
   // clear request
@@ -1740,7 +1736,7 @@ void Simulate::render() {
     }
 
     // finalize
-    Glfw().glfwSwapBuffers(this->window);
+    Glfw().glfwSwapBuffers(reinterpret_cast<GLFWwindow*>(this->window));
 
     return;
   }
@@ -1843,13 +1839,13 @@ void Simulate::render() {
   }
 
   // finalize
-  Glfw().glfwSwapBuffers(this->window);
+  Glfw().glfwSwapBuffers(reinterpret_cast<GLFWwindow*>(this->window));
 }
 
 
 // clear callbacks registered in external structures
 void Simulate::clearcallback() {
-  uiClearCallback(this->window);
+  uiClearCallback(reinterpret_cast<GLFWwindow*>(this->window));
 }
 
 void Simulate::renderloop() {
@@ -1860,26 +1856,29 @@ void Simulate::renderloop() {
   Glfw().glfwWindowHint(GLFW_SAMPLES, 4);
   Glfw().glfwWindowHint(GLFW_VISIBLE, 1);
 
-  // get videomode and save
-  this->vmode = *Glfw().glfwGetVideoMode(Glfw().glfwGetPrimaryMonitor());
+  // get videomode
+  this->vmode = Glfw().glfwGetVideoMode(Glfw().glfwGetPrimaryMonitor());
 
   // use videomode refreshrate if nonzero
-  if (this->vmode.refreshRate) this->refreshRate = this->vmode.refreshRate;
+  if (reinterpret_cast<const GLFWvidmode*>(this->vmode)->refreshRate)
+    this->refreshRate = reinterpret_cast<const GLFWvidmode*>(this->vmode)->refreshRate;
 
   // create window
-  this->window = Glfw().glfwCreateWindow((2*this->vmode.width)/3, (2*this->vmode.height)/3,
+  this->window = Glfw().glfwCreateWindow((2*reinterpret_cast<const GLFWvidmode*>(this->vmode)->width)/3,
+                                         (2*reinterpret_cast<const GLFWvidmode*>(this->vmode)->height)/3,
                                          "Simulate", nullptr, nullptr);
+
   if (!this->window) {
     Glfw().glfwTerminate();
     mju_error("could not create window");
   }
 
   // save window position and size
-  Glfw().glfwGetWindowPos(this->window, this->windowpos, this->windowpos+1);
-  Glfw().glfwGetWindowSize(this->window, this->windowsize, this->windowsize+1);
+  Glfw().glfwGetWindowPos(reinterpret_cast<GLFWwindow*>(this->window), this->windowpos, this->windowpos+1);
+  Glfw().glfwGetWindowSize(reinterpret_cast<GLFWwindow*>(this->window), this->windowsize, this->windowsize+1);
 
   // make context current, set v-sync
-  Glfw().glfwMakeContextCurrent(this->window);
+  Glfw().glfwMakeContextCurrent(reinterpret_cast<GLFWwindow*>(this->window));
   Glfw().glfwSwapInterval(this->vsync);
 
   // init abstract visualization
@@ -1893,7 +1892,7 @@ void Simulate::renderloop() {
   mjv_makeScene(nullptr, &this->scn, maxgeom);
 
   // select default font
-  int fontscale = uiFontScale(this->window);
+  int fontscale = uiFontScale(reinterpret_cast<GLFWwindow*>(this->window));
   this->font = fontscale/50 - 1;
 
   // make empty context
@@ -1917,7 +1916,7 @@ void Simulate::renderloop() {
 
   // set GLFW callbacks
   this->uistate.userdata = this;
-  uiSetCallback(this->window, &this->uistate, uiEvent, uiLayout, uiRender, uiDrop);
+  uiSetCallback(reinterpret_cast<GLFWwindow*>(this->window), &this->uistate, uiEvent, uiLayout, uiRender, uiDrop);
 
   // populate uis with standard sections
   this->ui0.userdata = this;
@@ -1926,11 +1925,11 @@ void Simulate::renderloop() {
   mjui_add(&this->ui0, this->defOption);
   mjui_add(&this->ui0, this->defSimulation);
   mjui_add(&this->ui0, this->defWatch);
-  uiModify(this->window, &this->ui0, &this->uistate, &this->con);
-  uiModify(this->window, &this->ui1, &this->uistate, &this->con);
+  uiModify(reinterpret_cast<GLFWwindow*>(this->window), &this->ui0, &this->uistate, &this->con);
+  uiModify(reinterpret_cast<GLFWwindow*>(this->window), &this->ui1, &this->uistate, &this->con);
 
   // run event loop
-  while (!Glfw().glfwWindowShouldClose(this->window) && !this->exitrequest.load()) {
+  while (!Glfw().glfwWindowShouldClose(reinterpret_cast<GLFWwindow*>(this->window)) && !this->exitrequest.load()) {
     {
       const std::lock_guard<std::mutex> lock(this->mtx);
 
@@ -1957,6 +1956,262 @@ void Simulate::renderloop() {
   this->clearcallback();
   mjv_freeScene(&this->scn);
   mjr_freeContext(&this->con);
+
+  Glfw().glfwDestroyWindow(reinterpret_cast<GLFWwindow*>(this->window));
+}
+
+//-------------------------------------- physics simulation --------------------------------------------
+mjModel* LoadModel(const char* file, Simulate& sim,
+                   simulate_model_load_func loader_xml,
+                   simulate_model_load_func loader_binary) {
+  // this copy is needed so that the mju::strlen call below compiles
+  char filename[mj::Simulate::kMaxFilenameLength];
+  mju::strcpy_arr(filename, file);
+
+  // make sure filename is not empty
+  if (!filename[0]) {
+    return nullptr;
+  }
+
+  // load and compile
+  char loadError[kErrorLength] = "";
+  mjModel* mnew = 0;
+  if (mju::strlen_arr(filename)>4 &&
+      !std::strncmp(filename + mju::strlen_arr(filename) - 4, ".mjb",
+                    mju::sizeof_arr(filename) - mju::strlen_arr(filename)+4)) {
+    mnew = loader_binary ? loader_binary(filename) : mj_loadModel(filename, nullptr);
+    if (!mnew) {
+      mju::strcpy_arr(loadError, "could not load binary model");
+    }
+  } else {
+    mnew = loader_xml ? loader_xml(filename) : mj_loadXML(filename, nullptr, loadError, mj::Simulate::kMaxFilenameLength);
+    // remove trailing newline character from loadError
+    if (loadError[0]) {
+      int error_length = mju::strlen_arr(loadError);
+      if (loadError[error_length-1] == '\n') {
+        loadError[error_length-1] = '\0';
+      }
+    }
+  }
+
+  mju::strcpy_arr(sim.loadError, loadError);
+
+  if (!mnew) {
+    std::printf("%s\n", loadError);
+    return nullptr;
+  }
+
+  // compiler warning: print and pause
+  if (loadError[0]) {
+    // mj_forward() below will print the warning message
+    std::printf("Model compiled, but simulation warning (paused):\n  %s\n", loadError);
+    sim.run = 0;
+  }
+
+  return mnew;
+}
+
+// simulate in background thread (while rendering in main thread)
+void PhysicsThread(Simulate& sim, const char* filename,
+                   mjfGeneric preload_callback, mjfGeneric load_callback,
+                   simulate_model_load_func loader_xml,
+                   simulate_model_load_func loader_binary,
+                   simulate_data_from_model_func data_from_model,
+                   simulate_delete_model_func delete_m, simulate_delete_data_func delete_d) {
+  // model and data
+  mjModel* m = nullptr;
+  mjData* d = nullptr;
+
+  // control noise variables
+  mjtNum* ctrlnoise = nullptr;
+
+  // request loadmodel if file given (otherwise drag-and-drop)
+  if (filename != nullptr) {
+    if (preload_callback) preload_callback(m, d);
+    m = LoadModel(filename, sim, loader_xml, loader_binary);
+    if (m) d = data_from_model ? data_from_model(m) : mj_makeData(m);
+    if (d) {
+      sim.load(filename, m, d);
+      mj_forward(m, d);
+
+      if (load_callback) load_callback(m, d);
+
+      // allocate ctrlnoise
+      free(ctrlnoise);
+      ctrlnoise = static_cast<mjtNum*>(malloc(sizeof(mjtNum)*m->nu));
+      mju_zero(ctrlnoise, m->nu);
+    }
+  }
+
+  // cpu-sim syncronization point
+  double syncCPU = 0;
+  mjtNum syncSim = 0;
+
+  // run until asked to exit
+  while (!sim.exitrequest.load()) {
+    if (sim.droploadrequest.load()) {
+      if (preload_callback) preload_callback(m, d);
+      mjModel* mnew = LoadModel(sim.dropfilename, sim, loader_xml, loader_binary);
+      sim.droploadrequest.store(false);
+
+      mjData* dnew = nullptr;
+      if (mnew) dnew = data_from_model ? data_from_model(mnew) : mj_makeData(mnew);
+      if (dnew) {
+        sim.load(sim.dropfilename, mnew, dnew);
+
+        if (d) delete_d ? delete_d(d) : mj_deleteData(d);
+        if (m) delete_m ? delete_m(m) : mj_deleteModel(m);
+        m = mnew;
+        d = dnew;
+
+        mj_forward(m, d);
+
+        if (load_callback) load_callback(m, d);
+
+        // allocate ctrlnoise
+        free(ctrlnoise);
+        ctrlnoise = (mjtNum*) malloc(sizeof(mjtNum)*m->nu);
+        mju_zero(ctrlnoise, m->nu);
+      }
+    }
+
+    if (sim.uiloadrequest.load()) {
+      if (preload_callback) preload_callback(m, d);
+      sim.uiloadrequest.fetch_sub(1);
+      mjModel* mnew = LoadModel(sim.filename, sim, loader_xml, loader_binary);
+      mjData* dnew = nullptr;
+      if (mnew) dnew = data_from_model ? data_from_model(mnew) : mj_makeData(mnew);
+      if (dnew) {
+        sim.load(sim.filename, mnew, dnew);
+
+        if (d) delete_d ? delete_d(d) : mj_deleteData(d);
+        if (m) delete_m ? delete_m(m) : mj_deleteModel(m);
+        m = mnew;
+        d = dnew;
+
+        mj_forward(m, d);
+
+        if (load_callback) load_callback(m, d);
+
+        // allocate ctrlnoise
+        free(ctrlnoise);
+        ctrlnoise = static_cast<mjtNum*>(malloc(sizeof(mjtNum)*m->nu));
+        mju_zero(ctrlnoise, m->nu);
+      }
+    }
+
+    // sleep for 1 ms or yield, to let main thread run
+    //  yield results in busy wait - which has better timing but kills battery life
+    if (sim.run && sim.busywait) {
+      std::this_thread::yield();
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    {
+      // lock the sim mutex
+      const std::lock_guard<std::mutex> lock(sim.mtx);
+
+      // run only if model is present
+      if (m) {
+        // running
+        if (sim.run) {
+          // record cpu time at start of iteration
+          double startCPU = Glfw().glfwGetTime();
+
+          // elapsed CPU and simulation time since last sync
+          double elapsedCPU = startCPU - syncCPU;
+          double elapsedSim = d->time - syncSim;
+
+          // inject noise
+          if (sim.ctrlnoisestd) {
+            // convert rate and scale to discrete time given current timestep (Ornstein–Uhlenbeck)
+            mjtNum rate = mju_exp(-m->opt.timestep / sim.ctrlnoiserate);
+            mjtNum scale = sim.ctrlnoisestd * mju_sqrt(1-rate*rate);
+
+            for (int i=0; i<m->nu; i++) {
+              // update noise
+              ctrlnoise[i] = rate * ctrlnoise[i] + scale * mju_standardNormal(nullptr);
+
+              // apply noise
+              d->ctrl[i] = ctrlnoise[i];
+            }
+          }
+
+          // requested slow-down factor
+          double slowdown = 100 / sim.percentRealTime[sim.realTimeIndex];
+
+          // misalignment condition: distance from target sim time is bigger than syncmisalign
+          bool misaligned = mju_abs(elapsedCPU/slowdown - elapsedSim) > syncMisalign;
+
+          // out-of-sync (for any reason): reset sync times, step
+          if (elapsedSim < 0 || elapsedCPU < 0 || syncCPU == 0 || misaligned || sim.speedChanged) {
+            // re-sync
+            syncCPU = startCPU;
+            syncSim = d->time;
+            sim.speedChanged = false;
+
+            // clear old perturbations, apply new
+            mju_zero(d->xfrc_applied, 6*m->nbody);
+            sim.applyposepertubations(0);  // move mocap bodies only
+            sim.applyforceperturbations();
+
+            // run single step, let next iteration deal with timing
+            mj_step(m, d);
+          }
+
+          // in-sync: step until ahead of cpu
+          else {
+            bool measured = false;
+            mjtNum prevSim = d->time;
+            double refreshTime = simRefreshFraction/sim.refreshRate;
+
+            // step while sim lags behind cpu and within refreshTime
+            while ((d->time - syncSim)*slowdown < (Glfw().glfwGetTime()-syncCPU) &&
+                   (Glfw().glfwGetTime()-startCPU) < refreshTime) {
+              // measure slowdown before first step
+              if (!measured && elapsedSim) {
+                sim.measuredSlowdown = elapsedCPU / elapsedSim;
+                measured = true;
+              }
+
+              // clear old perturbations, apply new
+              mju_zero(d->xfrc_applied, 6*m->nbody);
+              sim.applyposepertubations(0);  // move mocap bodies only
+              sim.applyforceperturbations();
+
+              // call mj_step
+              mj_step(m, d);
+
+              // break if reset
+              if (d->time < prevSim) {
+                break;
+              }
+            }
+          }
+        }
+
+        // paused
+        else {
+          // apply pose perturbation
+          sim.applyposepertubations(1);  // move mocap and dynamic bodies
+
+          // run mj_forward, to update rendering and joint sliders
+          mj_forward(m, d);
+        }
+      }
+    }  // release std::lock_guard<std::mutex>
+  }
+
+    // delete everything we allocated
+  free(ctrlnoise);
+  if (d) delete_d ? delete_d(d) : mj_deleteData(d);
+  if (m) delete_m ? delete_m(m) : mj_deleteModel(m);
+}
+
+//------------------------------------ setup the glfw dispatch table -------------------------------
+void setglfwdlhandle(void* dlhandle) {
+  Glfw(dlhandle);
 }
 
 }  // namespace mujoco
