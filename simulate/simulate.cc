@@ -1899,6 +1899,8 @@ void Simulate::renderloop() {
   this->clearcallback();
   mjv_freeScene(&this->scn);
   mjr_freeContext(&this->con);
+
+  glfwDestroyWindow(this->window);
 }
 
 }  // namespace mujoco

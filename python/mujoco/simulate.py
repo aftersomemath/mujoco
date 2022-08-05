@@ -237,13 +237,14 @@ def run_physics_loop(simulate, preload_callback=None, load_callback=None, file=N
     # end exclusive access
     simulate.unlock()
 
-def run_simulate_and_physics(file=None, preload_callback=None, load_callback=None):
+def run_simulate_and_physics(file=None, preload_callback=None, load_callback=None, init=True, terminate=True):
   # simulate object encapsulates the UI
   simulate = Simulate()
 
   # init GLFW
-  if not glfw.init():
-    raise mujoco.FatalError('could not initialize GLFW')
+  if init:
+    if not glfw.init():
+      raise mujoco.FatalError('could not initialize GLFW')
 
   # if m is not None:
   physics_thread = threading.Thread(target=lambda: run_physics_loop(simulate, preload_callback=preload_callback, load_callback=load_callback, file=file))
@@ -253,4 +254,5 @@ def run_simulate_and_physics(file=None, preload_callback=None, load_callback=Non
   simulate.renderloop()
   physics_thread.join()
 
-  glfw.terminate()
+  if terminate:
+    glfw.terminate()
