@@ -581,7 +581,75 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
     cam = scn->camera[view];
   } else {
     cam = mjv_averageCamera(scn->camera, scn->camera+1);
+    printf("avg\n");
   }
+
+  // float    pos[3];                // position
+  // float    forward[3];            // forward direction
+  // float    up[3];                 // up direction
+
+  // // camera projection
+  // float    frustum_center;        // hor. center (left,right set to match aspect)
+  // float    frustum_bottom;        // bottom
+  // float    frustum_top;           // top
+  // float    frustum_near;          // near
+  // float    frustum_far;           // far
+
+  printf("viewport\n");
+  printf("%d ", viewport.left);
+  printf("%d ", viewport.bottom);
+  printf("%d ", viewport.width);
+  printf("%d ", viewport.height);
+  printf("\n");
+
+  printf("cam\n");
+  printf("%f ", scn->camera[0].pos[0]);
+  printf("%f ", scn->camera[0].pos[1]);
+  printf("%f ", scn->camera[0].pos[2]);
+  printf("%f ", scn->camera[0].forward[0]);
+  printf("%f ", scn->camera[0].forward[1]);
+  printf("%f ", scn->camera[0].forward[2]);
+  printf("%f ", scn->camera[0].up[0]);
+  printf("%f ", scn->camera[0].up[1]);
+  printf("%f ", scn->camera[0].up[2]);
+  printf("%f ", scn->camera[0].frustum_center);
+  printf("%f ", scn->camera[0].frustum_bottom);
+  printf("%f ", scn->camera[0].frustum_top);
+  printf("%f ", scn->camera[0].frustum_near);
+  printf("%f ", scn->camera[0].frustum_far);
+  printf("\n");
+
+  printf("%f ", scn->camera[1].pos[0]);
+  printf("%f ", scn->camera[1].pos[1]);
+  printf("%f ", scn->camera[1].pos[2]);
+  printf("%f ", scn->camera[1].forward[0]);
+  printf("%f ", scn->camera[1].forward[1]);
+  printf("%f ", scn->camera[1].forward[2]);
+  printf("%f ", scn->camera[1].up[0]);
+  printf("%f ", scn->camera[1].up[1]);
+  printf("%f ", scn->camera[1].up[2]);
+  printf("%f ", scn->camera[1].frustum_center);
+  printf("%f ", scn->camera[1].frustum_bottom);
+  printf("%f ", scn->camera[1].frustum_top);
+  printf("%f ", scn->camera[1].frustum_near);
+  printf("%f ", scn->camera[1].frustum_far);
+  printf("\n");
+
+  printf("%f ", cam.pos[0]);
+  printf("%f ", cam.pos[1]);
+  printf("%f ", cam.pos[2]);
+  printf("%f ", cam.forward[0]);
+  printf("%f ", cam.forward[1]);
+  printf("%f ", cam.forward[2]);
+  printf("%f ", cam.up[0]);
+  printf("%f ", cam.up[1]);
+  printf("%f ", cam.up[2]);
+  printf("%f ", cam.frustum_center);
+  printf("%f ", cam.frustum_bottom);
+  printf("%f ", cam.frustum_top);
+  printf("%f ", cam.frustum_near);
+  printf("%f ", cam.frustum_far);
+  printf("\n");
 
   // compute frustum halfwidth so as to match viewport aspect ratio
   float halfwidth = 0.5f * (float)viewport.width/(float)viewport.height *
@@ -601,6 +669,15 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
   if (camProject) {
     glGetFloatv(GL_PROJECTION_MATRIX, camProject);
   }
+
+  float projection[16];
+  glGetFloatv(GL_PROJECTION_MATRIX, projection);
+
+  for (int i = 0; i < 16; i++) {
+    printf("%f, ", projection[i]);
+  }
+  printf("\n");
+
 
   // set modelview
   glMatrixMode(GL_MODELVIEW);
@@ -825,7 +902,7 @@ void mjr_render(mjrRect viewport, mjvScene* scn, const mjrContext* con) {
 
     if (scn->flags[mjRND_SEGMENT]) {
       // constant color rendering
-      glShadeModel(GL_FLAT);
+      glShadeModel(GL_SMOOTH);
       glDisable(GL_LIGHTING);
       glDisable(GL_COLOR_MATERIAL);
       glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
