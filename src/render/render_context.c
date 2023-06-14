@@ -1127,10 +1127,10 @@ static void makeOff(mjrContext* con) {
   }
   glBindRenderbuffer(GL_RENDERBUFFER, con->offDepthStencil);
   if (con->offSamples) {
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, con->offSamples, GL_DEPTH24_STENCIL8,
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, con->offSamples, GL_DEPTH32F_STENCIL8,
                                      con->offWidth, con->offHeight);
   } else {
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, con->offWidth, con->offHeight);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, con->offWidth, con->offHeight);
   }
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
                             GL_RENDERBUFFER, con->offDepthStencil);
@@ -1169,7 +1169,7 @@ static void makeOff(mjrContext* con) {
       mju_error("Could not allocate offscreen depth and stencil buffer_r");
     }
     glBindRenderbuffer(GL_RENDERBUFFER, con->offDepthStencil_r);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, con->offWidth, con->offHeight);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, con->offWidth, con->offHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
                               GL_RENDERBUFFER, con->offDepthStencil_r);
 
@@ -1830,10 +1830,10 @@ MJAPI void mjr_resizeOffscreen(int width, int height, mjrContext* con) {
 
   glBindRenderbuffer(GL_RENDERBUFFER, con->offDepthStencil);
   if (con->offSamples) {
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, con->offSamples, GL_DEPTH24_STENCIL8,
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, con->offSamples, GL_DEPTH32F_STENCIL8,
                                      con->offWidth, con->offHeight);
   } else {
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, con->offWidth, con->offHeight);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, con->offWidth, con->offHeight);
   }
 
   if (con->offSamples) {
@@ -1841,6 +1841,6 @@ MJAPI void mjr_resizeOffscreen(int width, int height, mjrContext* con) {
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, con->offWidth, con->offHeight);
 
     glBindRenderbuffer(GL_RENDERBUFFER, con->offDepthStencil_r);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, con->offWidth, con->offHeight);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, con->offWidth, con->offHeight);
   }
 }
