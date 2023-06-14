@@ -2304,6 +2304,12 @@ typedef void (APIENTRYP PFNGLGETBUFFERPOINTERVPROC)(GLenum target, GLenum pname,
 GLAPI PFNGLGETBUFFERPOINTERVPROC mjGlad_glGetBufferPointerv;
 #define glGetBufferPointerv mjGlad_glGetBufferPointerv
 #endif
+#define GL_LOWER_LEFT 0x8CA1
+#define GL_UPPER_LEFT 0x8CA2
+#define GL_NEGATIVE_ONE_TO_ONE 0x935E
+#define GL_ZERO_TO_ONE 0x935F
+#define GL_CLIP_ORIGIN 0x935C
+#define GL_CLIP_DEPTH_MODE 0x935D
 #define GL_INVALID_FRAMEBUFFER_OPERATION 0x0506
 #define GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING 0x8210
 #define GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE 0x8211
@@ -2487,6 +2493,13 @@ GLAPI PFNGLGETBUFFERPOINTERVPROC mjGlad_glGetBufferPointerv;
 #define GL_STACK_OVERFLOW_KHR 0x0503
 #define GL_STACK_UNDERFLOW_KHR 0x0504
 #define GL_DISPLAY_LIST 0x82E7
+#ifndef GL_ARB_clip_control
+#define GL_ARB_clip_control 1
+GLAPI int mjGLAD_GL_ARB_clip_control;
+typedef void (APIENTRYP PFNGLCLIPCONTROLPROC)(GLenum origin, GLenum depth);
+GLAPI PFNGLCLIPCONTROLPROC mjGlad_glClipControl;
+#define glClipControl mjGlad_glClipControl
+#endif
 #ifndef GL_ARB_framebuffer_object
 #define GL_ARB_framebuffer_object 1
 GLAPI int mjGLAD_GL_ARB_framebuffer_object;

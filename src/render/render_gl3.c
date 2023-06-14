@@ -490,6 +490,7 @@ static void initGL3(const mjvScene* scn, const mjrContext* con) {
   // common options
   glDisable(GL_BLEND);
   glEnable(GL_NORMALIZE);
+  glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_TRUE);
   if (scn->flags[mjRND_CULL_FACE]) {
@@ -498,11 +499,11 @@ static void initGL3(const mjvScene* scn, const mjrContext* con) {
     glDisable(GL_CULL_FACE);
   }
   glShadeModel(GL_SMOOTH);
-  glDepthFunc(GL_LEQUAL);
+  glDepthFunc(GL_GEQUAL);
   glDepthRange(0, 1);
   glAlphaFunc(GL_GEQUAL, 0.99f);
   glClearColor(0, 0, 0, 0);
-  glClearDepth(1);
+  glClearDepth(0);
   glClearStencil(0);
   glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
@@ -591,6 +592,9 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
   // set projection
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
+  // adjust for GL_ZERO_TO_ONE and negative Z
+  glTranslatef(0,0,0.5);
+  glScalef(1,1,-0.5);
   glFrustum(cam.frustum_center - halfwidth,
             cam.frustum_center + halfwidth,
             cam.frustum_bottom,
@@ -601,6 +605,14 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
   // save projection matrix if requested
   if (camProject) {
     glGetFloatv(GL_PROJECTION_MATRIX, camProject);
+
+    // printf("camProject\n");
+    // for(int i = 0; i < 4; i++) {
+    //   for(int j = 0; j < 4; j++) {
+    //     printf("%.10e ", camProject[4*i + j]);
+    //   }
+    //   printf("\n");
+    // }
   }
 
   // set modelview

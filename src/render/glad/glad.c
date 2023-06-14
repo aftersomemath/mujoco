@@ -824,10 +824,12 @@ PFNGLWINDOWPOS3IPROC mjGlad_glWindowPos3i = NULL;
 PFNGLWINDOWPOS3IVPROC mjGlad_glWindowPos3iv = NULL;
 PFNGLWINDOWPOS3SPROC mjGlad_glWindowPos3s = NULL;
 PFNGLWINDOWPOS3SVPROC mjGlad_glWindowPos3sv = NULL;
+int mjGLAD_GL_ARB_clip_control = 0;
 int mjGLAD_GL_ARB_framebuffer_object = 0;
 int mjGLAD_GL_ARB_seamless_cube_map = 0;
 int mjGLAD_GL_ARB_vertex_buffer_object = 0;
 int mjGLAD_GL_KHR_debug = 0;
+PFNGLCLIPCONTROLPROC mjGlad_glClipControl = NULL;
 PFNGLISRENDERBUFFERPROC mjGlad_glIsRenderbuffer = NULL;
 PFNGLBINDRENDERBUFFERPROC mjGlad_glBindRenderbuffer = NULL;
 PFNGLDELETERENDERBUFFERSPROC mjGlad_glDeleteRenderbuffers = NULL;
@@ -1350,6 +1352,11 @@ static void mjGlad_load_GL_VERSION_1_5(GLADloadproc load) {
   mjGlad_glGetBufferParameteriv = (PFNGLGETBUFFERPARAMETERIVPROC)load("glGetBufferParameteriv");
   mjGlad_glGetBufferPointerv = (PFNGLGETBUFFERPOINTERVPROC)load("glGetBufferPointerv");
 }
+static void mjGlad_load_GL_ARB_clip_control(GLADloadproc load) {
+  if(!mjGLAD_GL_ARB_clip_control) return;
+  mjGlad_glClipControl = (PFNGLCLIPCONTROLPROC)load("glClipControl");
+  printf("mjGlad_glClipControl %p\n", mjGlad_glClipControl);
+}
 static void mjGlad_load_GL_ARB_framebuffer_object(GLADloadproc load) {
   if(!mjGLAD_GL_ARB_framebuffer_object) return;
   mjGlad_glIsRenderbuffer = (PFNGLISRENDERBUFFERPROC)load("glIsRenderbuffer");
@@ -1414,6 +1421,8 @@ static void mjGlad_load_GL_KHR_debug(GLADloadproc load) {
 }
 static int mjGlad_find_extensionsGL(void) {
   if (!mjGlad_get_exts()) return 0;
+  mjGLAD_GL_ARB_clip_control = mjGlad_has_ext("GL_ARB_clip_control");
+  printf("mjGLAD_GL_ARB_clip_control %d\n", mjGLAD_GL_ARB_clip_control);
   mjGLAD_GL_ARB_framebuffer_object = mjGlad_has_ext("GL_ARB_framebuffer_object");
   mjGLAD_GL_ARB_seamless_cube_map = mjGlad_has_ext("GL_ARB_seamless_cube_map");
   mjGLAD_GL_ARB_vertex_buffer_object = mjGlad_has_ext("GL_ARB_vertex_buffer_object");
@@ -1486,6 +1495,7 @@ int mjGladLoadGLUnsafe() {
     mjGlad_load_GL_VERSION_1_5(mjGlad_get_proc);
 
     if (!mjGlad_find_extensionsGL()) return 0;
+    mjGlad_load_GL_ARB_clip_control(mjGlad_get_proc);
     mjGlad_load_GL_ARB_framebuffer_object(mjGlad_get_proc);
     mjGlad_load_GL_ARB_vertex_buffer_object(mjGlad_get_proc);
     mjGlad_load_GL_KHR_debug(mjGlad_get_proc);
