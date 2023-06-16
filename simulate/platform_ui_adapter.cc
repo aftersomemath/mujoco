@@ -19,6 +19,9 @@
 namespace mujoco {
 PlatformUIAdapter::PlatformUIAdapter() {
   mjr_defaultContext(&con_);
+
+  // con_.depthMapping =   mjDB_NEGONETOONE;
+  // con_.depthMapping =   mjDB_ONETOZERO;
 }
 
 PlatformUIAdapter::~PlatformUIAdapter() {
