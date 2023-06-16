@@ -592,7 +592,7 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
   // set projection
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  // adjust for GL_ZERO_TO_ONE and negative Z
+  // account for GL_ZERO_TO_ONE and reverse Z
   glTranslatef(0,0,0.5);
   glScalef(1,1,-0.5);
   glFrustum(cam.frustum_center - halfwidth,
@@ -675,11 +675,17 @@ void mjr_render(mjrRect viewport, mjvScene* scn, const mjrContext* con) {
   float temp[4], headpos[3], forward[3], skyboxdst;
   float camProject[16], camView[16], lightProject[16], lightView[16];
   double clipplane[4];
+  // float biasMatrix[16] = {
+  //   0.5f, 0.0f, 0.0f, 0.0f,
+  //   0.0f, 0.5f, 0.0f, 0.0f,
+  //   0.0f, 0.0f, 0.5f, 0.0f,
+  //   0.5f, 0.5f, 0.5f, 1.0f
+  // };
   float biasMatrix[16] = {
     0.5f, 0.0f, 0.0f, 0.0f,
     0.0f, 0.5f, 0.0f, 0.0f,
-    0.0f, 0.0f, 0.5f, 0.0f,
-    0.5f, 0.5f, 0.5f, 1.0f
+    0.0f, 0.0f,  1.0f, 0.0f,
+    0.5f, 0.5f,  0.0f, 1.0f
   };
   float tempMatrix[16], textureMatrix[16];
   mjvGeom *thisgeom, tempgeom;
@@ -1028,6 +1034,9 @@ void mjr_render(mjrRect viewport, mjvScene* scn, const mjrContext* con) {
           // set projection: from light viewpoint
           glMatrixMode(GL_PROJECTION);
           glLoadIdentity();
+          // account for GL_ZERO_TO_ONE and reverse Z
+          glTranslatef(0,0,0.5);
+          glScalef(1,1,-0.5);
           if (thislight->directional) {
             glOrtho(-con->shadowClip, con->shadowClip,
                     -con->shadowClip, con->shadowClip,
