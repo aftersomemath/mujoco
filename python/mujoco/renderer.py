@@ -32,7 +32,9 @@ class Renderer:
       model: _structs.MjModel,
       height: int = 240,
       width: int = 320,
-      max_geom: int = 10000
+      max_geom: int = 10000,
+      depth_mapping: _enums.mjtDepthMapping =  _enums.mjtDepthMapping.mjDB_NEGONETOONE,
+      depth_precision: _enums.mjtDepthMapping =  _enums.mjtDepthPrecision.mjDB_FLOAT32,
   ) -> None:
     """Initializes a new `Renderer`.
 
@@ -43,6 +45,8 @@ class Renderer:
       max_geom: Optional integer specifying the maximum number of geoms that can
         be rendered in the same scene. If None this will be chosen automatically
         based on the estimated maximum number of renderable geoms in the model.
+      depth_mapping: Type of mapping from znear to zfar to z buffer values
+      depth_precision: Precision of z buffer
     Raises:
       ValueError: If `camera_id` is outside the valid range, or if `width` or
         `height` exceed the dimensions of MuJoCo's offscreen framebuffer.
@@ -70,6 +74,8 @@ the clause:
     self._width = width
     self._height = height
     self._model = model
+    self._depth_mapping = depth_mapping
+    self._depth_precision = depth_precision
 
     self._scene = _structs.MjvScene(model=model, maxgeom=max_geom)
     self._scene_option = _structs.MjvOption()
@@ -80,7 +86,7 @@ the clause:
     self._gl_context = gl_context.GLContext(width, height)
     self._gl_context.make_current()
     self._mjr_context = _render.MjrContext(
-        model, _enums.mjtFontScale.mjFONTSCALE_150
+        model, _enums.mjtFontScale.mjFONTSCALE_150, depth_mapping, depth_precision
     )
     _render.mjr_setBuffer(
         _enums.mjtFramebuffer.mjFB_OFFSCREEN, self._mjr_context
@@ -172,10 +178,38 @@ the clause:
       near = self._model.vis.map.znear * extent
       far = self._model.vis.map.zfar * extent
 
-      # Convert from [0 1] to depth in units of length, see links below:
-      # http://stackoverflow.com/a/6657284/1461210
-      # https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision
-      out = near / (1 - out * (1 - near / far))
+      if self._depth_mapping == _enums.mjtDepthMapping.mjDB_NEGONETOONE:
+        # Convert from [0 1] backed by a Z-buffer
+        # representing [znear zfar] as [-1, 1]
+        # to depth in units of length, see links below:
+        # http://stackoverflow.com/a/6657284/1461210
+        # https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision
+        out = near / (1 - out * (1 - near / far))
+      elif self._depth_mapping == _enums.mjtDepthMapping.mjDB_ONETOZERO:
+        # Convert from [0 1] backed by a Z-buffer
+        # representing [znear zfar] as [1 0]
+        # to depth in units of length, see links below:
+        # TODO links
+        def glFrustum_CD_float32(znear, zfar):
+          zfar  = np.float32(zfar)
+          znear = np.float32(znear)
+          C = -(zfar + znear)/(zfar - znear)
+          D = -(np.float32(2)*zfar*znear)/(zfar - znear)
+          return C, D
+
+        def ogl_zbuf_projection_inverse(zbuf, C, D):
+          zlinear = 1 / ((zbuf - (-C)) / D) # TODO why -C?
+          return zlinear
+
+        def ogl_zbuf_negz_inv(zbuf, znear=None, zfar=None, C=None, D=None):
+          if C is None:
+            C, D = glFrustum_CD_float32(znear, zfar)
+            C = np.float32(-0.5)*C - np.float32(0.5)
+            D = np.float32(-0.5)*D
+          zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
+          return zlinear
+
+        out = ogl_zbuf_negz_inv(out, near, far)
 
     elif self._segmentation_rendering:
       _render.mjr_readPixels(out, None, self._rect, self._mjr_context)
