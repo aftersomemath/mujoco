@@ -15,7 +15,7 @@
 """Generates structs.py.
 
 The JSON input can be generated via:
-  clang -Xclang -ast-dump=json -fsyntax-only -fparse-all-comments -x c mujoco.h
+  clang -Xclang -ast-dump=json -fsyntax-only -fparse-all-comments -x c -I mujoco/include mujoco.h
 """
 
 import itertools
@@ -29,7 +29,10 @@ from absl import flags
 
 from introspect import ast_nodes
 from introspect import type_parsing
-from . import formatter
+try:
+  from . import formatter
+except ImportError:
+  import formatter
 
 _JSON_PATH = flags.DEFINE_string(
     'json_path', None,
