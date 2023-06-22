@@ -24,6 +24,51 @@ from mujoco import gl_context
 import numpy as np
 
 
+def glFrustum_CD_float32(znear, zfar):
+  zfar  = np.float32(zfar)
+  znear = np.float32(znear)
+  C = -(zfar + znear)/(zfar - znear)
+  D = -(np.float32(2)*zfar*znear)/(zfar - znear)
+  return C, D
+
+def ogl_zbuf_projection(zlinear, C, D):
+  zbuf = -C + (1/zlinear)*D # TODO why -C?
+  return zbuf
+
+def ogl_zbuf_projection_inverse(zbuf, C, D):
+  zlinear = 1 / ((zbuf - (-C)) / D) # TODO why -C?
+  return zlinear
+
+def ogl_zbuf_default(zlinear, znear=None, zfar=None, C=None, D=None):
+  if C is None:
+    C, D = glFrustum_CD_float32(znear, zfar)
+  zbuf = ogl_zbuf_projection(zlinear, C, D)
+  zbuf_scaled = 0.5 * zbuf + 0.5
+  return zbuf_scaled
+
+def ogl_zbuf_negz(zlinear, znear=None, zfar=None, C=None, D=None):
+  if C is None:
+    C, D = glFrustum_CD_float32(znear, zfar)
+    C = np.float32(-0.5)*C - np.float32(0.5)
+    D = np.float32(-0.5)*D
+  zlinear = ogl_zbuf_projection(zlinear, C, D)
+  return zlinear
+
+def ogl_zbuf_default_inv(zbuf_scaled, znear=None, zfar=None, C=None, D=None):
+  if C is None:
+    C, D = glFrustum_CD_float32(znear, zfar)
+  zbuf = 2.0 * zbuf_scaled - 1.0
+  zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
+  return zlinear
+
+def ogl_zbuf_negz_inv(zbuf, znear=None, zfar=None, C=None, D=None):
+  if C is None:
+    C, D = glFrustum_CD_float32(znear, zfar)
+    C = np.float32(-0.5)*C - np.float32(0.5)
+    D = np.float32(-0.5)*D
+  zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
+  return zlinear
+
 class Renderer:
   """Renders MuJoCo scenes."""
 
@@ -143,7 +188,7 @@ the clause:
     """
     original_flags = self._scene.flags.copy()
 
-    if self._segmentation_rendering:
+    if self._depth_rendering or self._segmentation_rendering:
       self._scene.flags[_enums.mjtRndFlag.mjRND_SEGMENT] = True
       self._scene.flags[_enums.mjtRndFlag.mjRND_IDCOLOR] = True
 
@@ -173,6 +218,8 @@ the clause:
     if self._depth_rendering:
       _render.mjr_readPixels(None, out, self._rect, self._mjr_context)
 
+      out = out.astype(np.float64)
+
       # Get the distances to the near and far clipping planes.
       extent = self._model.stat.extent
       near = self._model.vis.map.znear * extent
@@ -184,33 +231,18 @@ the clause:
         # to depth in units of length, see links below:
         # http://stackoverflow.com/a/6657284/1461210
         # https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision
-        out = near / (1 - out * (1 - near / far))
+        # out = near / (1 - out * (1 - near / far))
+        out = ogl_zbuf_default_inv(out, near, far)
       elif self._depth_mapping == _enums.mjtDepthMapping.mjDB_ONETOZERO:
         # Convert from [0 1] backed by a Z-buffer
         # representing [znear zfar] as [1 0]
-        # to depth in units of length, see links below:
+        # to depth in units of length, see links above and below:
         # TODO links
-        def glFrustum_CD_float32(znear, zfar):
-          zfar  = np.float32(zfar)
-          znear = np.float32(znear)
-          C = -(zfar + znear)/(zfar - znear)
-          D = -(np.float32(2)*zfar*znear)/(zfar - znear)
-          return C, D
-
-        def ogl_zbuf_projection_inverse(zbuf, C, D):
-          zlinear = 1 / ((zbuf - (-C)) / D) # TODO why -C?
-          return zlinear
-
-        def ogl_zbuf_negz_inv(zbuf, znear=None, zfar=None, C=None, D=None):
-          if C is None:
-            C, D = glFrustum_CD_float32(znear, zfar)
-            C = np.float32(-0.5)*C - np.float32(0.5)
-            D = np.float32(-0.5)*D
-          zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
-          return zlinear
-
+        # out = near / (1 - (-out + 1) * (1 - near / far))
         out = ogl_zbuf_negz_inv(out, near, far)
 
+      # Reset scene flags.
+      np.copyto(self._scene.flags, original_flags)
     elif self._segmentation_rendering:
       _render.mjr_readPixels(out, None, self._rect, self._mjr_context)
 
