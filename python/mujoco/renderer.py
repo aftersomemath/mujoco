@@ -23,52 +23,6 @@ from mujoco import _structs
 from mujoco import gl_context
 import numpy as np
 
-
-def glFrustum_CD_float32(znear, zfar):
-  zfar  = np.float32(zfar)
-  znear = np.float32(znear)
-  C = -(zfar + znear)/(zfar - znear)
-  D = -(np.float32(2)*zfar*znear)/(zfar - znear)
-  return C, D
-
-def ogl_zbuf_projection(zlinear, C, D):
-  zbuf = -C + (1/zlinear)*D # TODO why -C?
-  return zbuf
-
-def ogl_zbuf_projection_inverse(zbuf, C, D):
-  zlinear = 1 / ((zbuf - (-C)) / D) # TODO why -C?
-  return zlinear
-
-def ogl_zbuf_default(zlinear, znear=None, zfar=None, C=None, D=None):
-  if C is None:
-    C, D = glFrustum_CD_float32(znear, zfar)
-  zbuf = ogl_zbuf_projection(zlinear, C, D)
-  zbuf_scaled = 0.5 * zbuf + 0.5
-  return zbuf_scaled
-
-def ogl_zbuf_negz(zlinear, znear=None, zfar=None, C=None, D=None):
-  if C is None:
-    C, D = glFrustum_CD_float32(znear, zfar)
-    C = np.float32(-0.5)*C - np.float32(0.5)
-    D = np.float32(-0.5)*D
-  zlinear = ogl_zbuf_projection(zlinear, C, D)
-  return zlinear
-
-def ogl_zbuf_default_inv(zbuf_scaled, znear=None, zfar=None, C=None, D=None):
-  if C is None:
-    C, D = glFrustum_CD_float32(znear, zfar)
-  zbuf = 2.0 * zbuf_scaled - 1.0
-  zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
-  return zlinear
-
-def ogl_zbuf_negz_inv(zbuf, znear=None, zfar=None, C=None, D=None):
-  if C is None:
-    C, D = glFrustum_CD_float32(znear, zfar)
-    C = np.float32(-0.5)*C - np.float32(0.5)
-    D = np.float32(-0.5)*D
-  zlinear = ogl_zbuf_projection_inverse(zbuf, C, D)
-  return zlinear
-
 class Renderer:
   """Renders MuJoCo scenes."""
 
@@ -188,6 +142,7 @@ the clause:
     """
     original_flags = self._scene.flags.copy()
 
+    # Using segmented rendering makes the depth more accurate at far distances
     if self._depth_rendering or self._segmentation_rendering:
       self._scene.flags[_enums.mjtRndFlag.mjRND_SEGMENT] = True
       self._scene.flags[_enums.mjtRndFlag.mjRND_IDCOLOR] = True
@@ -218,28 +173,35 @@ the clause:
     if self._depth_rendering:
       _render.mjr_readPixels(None, out, self._rect, self._mjr_context)
 
-      out = out.astype(np.float64)
-
       # Get the distances to the near and far clipping planes.
       extent = self._model.stat.extent
       near = self._model.vis.map.znear * extent
       far = self._model.vis.map.zfar * extent
 
-      if self._depth_mapping == _enums.mjtDepthMapping.mjDB_NEGONETOONE:
-        # Convert from [0 1] backed by a Z-buffer
-        # representing [znear zfar] as [-1, 1]
-        # to depth in units of length, see links below:
-        # http://stackoverflow.com/a/6657284/1461210
-        # https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision
-        # out = near / (1 - out * (1 - near / far))
-        out = ogl_zbuf_default_inv(out, near, far)
-      elif self._depth_mapping == _enums.mjtDepthMapping.mjDB_ONETOZERO:
+      # Calculate C and D in float32 precision so they are closer to what glFrustum returns
+      zfar  = np.float32(far)
+      znear = np.float32(near)
+      C = -(zfar + znear)/(zfar - znear)
+      D = -(np.float32(2)*zfar*znear)/(zfar - znear)
+
+      if self._depth_mapping == _enums.mjtDepthMapping.mjDB_ONETOZERO:
         # Convert from [0 1] backed by a Z-buffer
         # representing [znear zfar] as [1 0]
-        # to depth in units of length, see links above and below:
-        # TODO links
-        # out = near / (1 - (-out + 1) * (1 - near / far))
-        out = ogl_zbuf_negz_inv(out, near, far)
+        C = np.float32(-0.5)*C - np.float32(0.5)
+        D = np.float32(-0.5)*D
+
+      # We need 64 bits to do the inversions below without significant losses in precision
+      out_64 = out.astype(np.float64)
+
+      # Undo OpenGL's linear scaling of the Z buffer from [-1 1] to [0 1]
+      if self._depth_mapping == _enums.mjtDepthMapping.mjDB_NEGONETOONE:
+        out_64 = 2.0 * out_64 - 1.0
+
+      # Undo OpenGL projection
+      out_64 = 1 / ((out_64 - (-C)) / D) # TODO why -C?
+
+      # Cast result back to float32 for backwards compatibility
+      out[:] = out_64.astype(np.float32)
 
       # Reset scene flags.
       np.copyto(self._scene.flags, original_flags)
