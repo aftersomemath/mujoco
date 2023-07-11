@@ -68,6 +68,7 @@
   <visual>
     <quality shadowsize="4096" offsamples="8"/>
     <map znear="0.1" force="0.05"/>
+    <global  offwidth="3840" offheight="2160"/>
   </visual>
 
   <statistic extent="4"/>

@@ -72,6 +72,10 @@ void initMuJoCo(const char* filename) {
 
   // create scene and context
   mjv_makeScene(m, &scn, 2000);
+
+  // con.depthMapping = mjDB_ONETOZERO;
+  con.depthPrecision = mjDB_FLOAT32;
+
   mjr_makeContext(m, &con, 200);
 
   // default free camera
@@ -242,6 +246,8 @@ int main(int argc, const char** argv) {
   int W = viewport.width;
   int H = viewport.height;
 
+  printf("%d %d\n", W, H);
+
   // allocate rgb and depth buffers
   unsigned char* rgb = (unsigned char*)std::malloc(3*W*H);
   float* depth = (float*)std::malloc(sizeof(float)*W*H);
@@ -258,7 +264,8 @@ int main(int argc, const char** argv) {
   // main loop
   double frametime = 0;
   int framecount = 0;
-  while (d->time<duration) {
+  // while (d->time<duration) {
+  while (framecount < duration * fps) {
     // render new frame if it is time (or first frame)
     if ((d->time-frametime)>1/fps || frametime==0) {
       // update abstract scene
@@ -266,14 +273,15 @@ int main(int argc, const char** argv) {
 
       // render scene in offscreen buffer
       mjr_render(viewport, &scn, &con);
+      framecount++;
 
       // add time stamp in upper-left corner
-      char stamp[50];
-      mju::sprintf_arr(stamp, "Time = %.3f", d->time);
-      mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, viewport, stamp, NULL, &con);
+      // char stamp[50];
+      // mju::sprintf_arr(stamp, "Time = %.3f", d->time);
+      // mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, viewport, stamp, NULL, &con);
 
       // read rgb and depth buffers
-      mjr_readPixels(rgb, depth, viewport, &con);
+      // mjr_readPixels(rgb, depth, viewport, &con);
 
       // insert subsampled depth image in lower-left corner of rgb image
       const int NS = 3;           // depth image sub-sampling
@@ -284,23 +292,23 @@ int main(int argc, const char** argv) {
         }
 
       // write rgb image to file
-      std::fwrite(rgb, 3, W*H, fp);
+      // std::fwrite(rgb, 3, W*H, fp);
 
       // print every 10 frames: '.' if ok, 'x' if OpenGL error
-      if (((framecount++)%10)==0) {
-        if (mjr_getError()) {
-          std::printf("x");
-        } else {
-          std::printf(".");
-        }
-      }
+      // if (((framecount++)%10)==0) {
+      //   if (mjr_getError()) {
+      //     std::printf("x");
+      //   } else {
+      //     std::printf(".");
+      //   }
+      // }
 
       // save simulation time
       frametime = d->time;
     }
 
     // advance simulation
-    mj_step(m, d);
+    // mj_step(m, d);
   }
   std::printf("\n");
 
