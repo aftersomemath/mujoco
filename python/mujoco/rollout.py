@@ -14,7 +14,7 @@
 # ==============================================================================
 """Roll out open-loop trajectories from initial states, get subsequent states and sensor values."""
 
-from typing import Optional
+from typing import Optional, Union
 
 import mujoco
 from mujoco import _rollout
@@ -22,18 +22,18 @@ import numpy as np
 from numpy import typing as npt
 
 
-def rollout(model: mujoco.MjModel,
-            data: mujoco.MjData,
-            initial_state: npt.ArrayLike,
-            control: Optional[npt.ArrayLike] = None,
+def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
+            data: Union[mujoco.MjData, list[mujoco.MjData]],
+            initial_state: Union[npt.ArrayLike, list[npt.ArrayLike]],
+            control: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             *,  # require subsequent arguments to be named
             control_spec: int = mujoco.mjtState.mjSTATE_CTRL.value,
             skip_checks: bool = False,
-            nroll: Optional[int] = None,
-            nstep: Optional[int] = None,
-            initial_warmstart: Optional[npt.ArrayLike] = None,
-            state: Optional[npt.ArrayLike] = None,
-            sensordata: Optional[npt.ArrayLike] = None):
+            nroll: Optional[int] = None, # TODO per rollout?
+            nstep: Optional[int] = None, # TODO per rollout
+            initial_warmstart: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
+            state: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
+            sensordata: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None):
   """Rolls out open-loop trajectories from initial states, get subsequent states and sensor values.
 
   Python wrapper for rollout.cc, see documentation therein.
@@ -41,9 +41,9 @@ def rollout(model: mujoco.MjModel,
   Tiles inputs with singleton dimensions.
   Allocates outputs if none are given.
 
-  Args:
-    model: An mjModel instance.
-    data: An associated mjData instance.
+  Args: # TODO describe args better
+    model: An mjModel or list of mjModel instances.
+    data: Associated mjData instance(s).
     initial_state: Array of initial states from which to roll out trajectories.
       ([nroll or 1] x nstate)
     control: Open-loop controls array to apply during the rollouts.
@@ -87,71 +87,95 @@ def rollout(model: mujoco.MjModel,
     raise ValueError('nroll must be an integer')
   if nstep and not isinstance(nstep, int):
     raise ValueError('nstep must be an integer')
-  _check_must_be_numeric(
-      initial_state=initial_state,
-      initial_warmstart=initial_warmstart,
-      control=control,
-      state=state,
-      sensordata=sensordata)
 
-  # check number of dimensions
-  _check_number_of_dimensions(2,
-                              initial_state=initial_state,
-                              initial_warmstart=initial_warmstart)
-  _check_number_of_dimensions(3,
-                              control=control,
-                              state=state,
-                              sensordata=sensordata)
+  # convert args allowed to be single objects to lists
+  model = _ensure_in_list(model)
+  data = _ensure_in_list(data)
+  initial_state = _ensure_in_list(initial_state)
 
-  # ensure 2D, make contiguous, row-major (C ordering)
-  initial_state = _ensure_2d(initial_state)
-  initial_warmstart = _ensure_2d(initial_warmstart)
+  # record if optional args were unspecified
+  control_none = control is None
+  initial_warmstart_none = initial_warmstart is None
+  state_none = state is None
+  sensordata_none = sensordata is None
 
-  # ensure 3D, make contiguous, row-major (C ordering)
-  control = _ensure_3d(control)
-  state = _ensure_3d(state)
-  sensordata = _ensure_3d(sensordata)
+  # convert optional args allowed to be single objects to lists
+  control           = _ensure_in_list(control, len(model))
+  initial_warmstart = _ensure_in_list(initial_warmstart, len(model))
+  state             = _ensure_in_list(state, len(model))
+  sensordata        = _ensure_in_list(sensordata, len(model))
 
-  # check trailing dimensions
-  nstate = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS.value)
-  _check_trailing_dimension(nstate, initial_state=initial_state, state=state)
-  ncontrol = mujoco.mj_stateSize(model, control_spec)
-  _check_trailing_dimension(ncontrol, control=control)
-  _check_trailing_dimension(model.nv, initial_warmstart=initial_warmstart)
-  _check_trailing_dimension(model.nsensordata, sensordata=sensordata)
+  for i in range(len(model)):
+    # check types
+    _check_must_be_numeric(
+        initial_state=initial_state[i],
+        initial_warmstart=initial_warmstart[i],
+        control=control[i],
+        state=state[i],
+        sensordata=sensordata[i])
 
-  # infer nroll, check for incompatibilities
-  nroll = _infer_dimension(0, nroll or 1,
-                           initial_state=initial_state,
-                           initial_warmstart=initial_warmstart,
-                           control=control,
-                           state=state,
-                           sensordata=sensordata)
+    # check number of dimensions
+    _check_number_of_dimensions(2,
+                                initial_state=initial_state[i],
+                                initial_warmstart=initial_warmstart[i])
+    _check_number_of_dimensions(3,
+                                control=control[i],
+                                state=state[i],
+                                sensordata=sensordata[i])
 
-  # infer nstep, check for incompatibilities
-  nstep = _infer_dimension(1, nstep or 1,
-                           control=control,
-                           state=state,
-                           sensordata=sensordata)
+    # ensure 2D, make contiguous, row-major (C ordering)
+    initial_state[i] = _ensure_2d(initial_state[i])
+    initial_warmstart[i] = _ensure_2d(initial_warmstart[i])
 
-  # tile input arrays if required (singleton expansion)
-  initial_state = _tile_if_required(initial_state, nroll)
-  initial_warmstart = _tile_if_required(initial_warmstart, nroll)
-  control = _tile_if_required(control, nroll, nstep)
+    # ensure 3D, make contiguous, row-major (C ordering)
+    control[i] = _ensure_3d(control[i])
+    state[i] = _ensure_3d(state[i])
+    sensordata[i] = _ensure_3d(sensordata[i])
 
-  # allocate output if not provided
-  if state is None:
-    state = np.empty((nroll, nstep, nstate))
-  if sensordata is None:
-    sensordata = np.empty((nroll, nstep, model.nsensordata))
+    # check trailing dimensions
+    nstate = mujoco.mj_stateSize(model[i], mujoco.mjtState.mjSTATE_FULLPHYSICS.value)
+    _check_trailing_dimension(nstate, initial_state=initial_state[i], state=state[i])
+    ncontrol = mujoco.mj_stateSize(model[i], control_spec)
+    _check_trailing_dimension(ncontrol, control=control[i])
+    _check_trailing_dimension(model[i].nv, initial_warmstart=initial_warmstart[i])
+    _check_trailing_dimension(model[i].nsensordata, sensordata=sensordata[i])
+
+    # infer nroll, check for incompatibilities
+    nroll = _infer_dimension(0, nroll or 1,
+                             initial_state=initial_state[i],
+                             initial_warmstart=initial_warmstart[i],
+                             control=control[i],
+                             state=state[i],
+                             sensordata=sensordata[i])
+
+    # infer nstep, check for incompatibilities
+    nstep = _infer_dimension(1, nstep or 1,
+                             control=control[i],
+                             state=state[i],
+                             sensordata=sensordata[i])
+
+    # tile input arrays if required (singleton expansion)
+    initial_state[i] = _tile_if_required(initial_state[i], nroll)
+    initial_warmstart[i] = _tile_if_required(initial_warmstart[i], nroll)
+    control[i] = _tile_if_required(control[i], nroll, nstep)
+
+    # allocate output if not provided
+    if state[i] is None:
+      state[i] = np.empty((nroll, nstep, nstate))
+    if sensordata[i] is None:
+      sensordata[i] = np.empty((nroll, nstep, model[i].nsensordata))
+
+  control = _restore_none(control, control_none)
+  initial_warmstart = _restore_none(initial_warmstart, initial_warmstart_none)
+  state = _restore_none(state, state_none)
+  sensordata = _restore_none(sensordata, sensordata_none)
 
   # call rollout
-  _rollout.rollout(model, data, nroll, nstep, control_spec, initial_state,
+  _rollout.rollout(model, data, len(model), nroll, nstep, control_spec, initial_state,
                    initial_warmstart, control, state, sensordata)
 
   # return outputs
   return state, sensordata
-
 
 def _check_must_be_numeric(**kwargs):
   for key, value in kwargs.items():
@@ -178,6 +202,16 @@ def _check_trailing_dimension(dim, **kwargs):
           f'trailing dimension of {key} must be {dim}, got {value.shape[-1]}'
       )
 
+def _ensure_in_list(arg, len_none=None):
+  if arg is None:
+    return [arg]*len_none
+  elif type(arg) != list:
+    return [arg]
+  else:
+    return arg
+
+def _restore_none(arg, is_none):
+  return None if is_none else arg
 
 def _ensure_2d(arg):
   if arg is None:
