@@ -24,7 +24,7 @@ from numpy import typing as npt
 
 def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
             data: Union[mujoco.MjData, list[mujoco.MjData]],
-            initial_state: Union[npt.ArrayLike, list[npt.ArrayLike]],
+            initial_state: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             control: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             *,  # require subsequent arguments to be named
             control_spec: int = mujoco.mjtState.mjSTATE_CTRL.value,
@@ -101,7 +101,13 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
   # convert args allowed to be single objects to lists
   model = _ensure_in_list(model)
   data = _ensure_in_list(data)
-  initial_state = _ensure_in_list(initial_state)
+  if not initial_state:
+    initial_state = []
+    for m, d in zip(model, data):
+      initial_state.append(np.zeros((mujoco.mj_stateSize(m, mujoco.mjtState.mjSTATE_FULLPHYSICS),)))
+      mujoco.mj_getState(m, d, initial_state[-1], mujoco.mjtState.mjSTATE_FULLPHYSICS)
+  else:
+    initial_state = _ensure_in_list(initial_state)
 
   # record if optional args were unspecified
   control_none = control is None
