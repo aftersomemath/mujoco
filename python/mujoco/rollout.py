@@ -33,7 +33,8 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
             nstep: Optional[int] = None, # TODO per rollout
             initial_warmstart: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             state: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
-            sensordata: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None):
+            sensordata: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
+            nthread: Optional[int] = None):
   """Rolls out open-loop trajectories from initial states, get subsequent states and sensor values.
 
   Python wrapper for rollout.cc, see documentation therein.
@@ -75,12 +76,12 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
   #   just call rollout and return
   if skip_checks:
     _rollout.rollout(model, data, nroll, nstep, control_spec, initial_state,
-                     initial_warmstart, control, state, sensordata)
+                     initial_warmstart, control, state, sensordata, nthread)
     return state, sensordata
 
   # check model, data for consistent length
-  if type(model) == list:
-    if type(data) != list:
+  if isinstance(model, list):
+    if not isinstance(data, list):
       raise ValueError('model and data must be single instances or lists')
     if len(model) != len(data):
       raise ValueError('model and data must be the same length')
@@ -94,6 +95,8 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
     raise ValueError('nroll must be an integer')
   if nstep and not isinstance(nstep, int):
     raise ValueError('nstep must be an integer')
+  if nthread and not isinstance(nthread, int):
+    raise ValueError('nthread must be an integer')
 
   # convert args allowed to be single objects to lists
   model = _ensure_in_list(model)
@@ -179,7 +182,7 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
 
   # call rollout
   _rollout.rollout(model, data, nroll, nstep, control_spec, initial_state,
-                   initial_warmstart, control, state, sensordata)
+                   initial_warmstart, control, state, sensordata, nthread)
 
   # return outputs
   return state, sensordata

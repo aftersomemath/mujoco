@@ -159,17 +159,68 @@ void _unsafe_rollout(const mjModel* m, mjData* d, int nroll, int nstep, unsigned
 
 // NOLINTEND(whitespace/line_length)
 
+struct UnsafeRolloutArgs_ {
+  const mjModel* m;
+  mjData* d;
+  int nroll;
+  int nstep;
+  unsigned int control_spec;
+  const mjtNum* state0;
+  const mjtNum* warmstart0;
+  const mjtNum* control;
+  mjtNum* state;
+  mjtNum* sensordata;
+};
+typedef struct UnsafeRolloutArgs_ UnsafeRolloutArgs;
+
+void* _unsafe_rollout_with_arg(void* arg) {
+  UnsafeRolloutArgs* a = static_cast<UnsafeRolloutArgs*>(arg);
+  _unsafe_rollout(a->m, a->d, a->nroll, a->nstep, a->control_spec,
+    a->state0, a->warmstart0, a->control, a->state, a->sensordata);
+  return nullptr;
+}
+
 // Dispatch rollouts of multiple models through _unsafe_rollout
 // Arguments have the same properties as _unsafe_rollout
 void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int nroll, int nstep, unsigned int control_spec,
-                        const mjtNum** state0, const mjtNum** warmstart0, const mjtNum** control,
-                        mjtNum** state, mjtNum** sensordata) {
+                      const mjtNum** state0, const mjtNum** warmstart0, const mjtNum** control,
+                      mjtNum** state, mjtNum** sensordata,
+                      int nthread) {
 
-  // TOOD use threadpool
-  // TODO check standards for pointer usage
-  for (unsigned int i = 0; i < nmodel; i++) {
-    _unsafe_rollout(m[i], d[i], nroll, nstep, control_spec,
-      state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
+  if (nthread == 0) {
+      for (int i = 0; i < nmodel; i++) {
+        _unsafe_rollout(m[i], d[i], nroll, nstep, control_spec, 
+          state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
+      }
+  }
+  else {
+    mjThreadPool* pool = mju_threadPoolCreate(nthread);
+
+    mjTask tasks[nmodel];
+    UnsafeRolloutArgs args[nmodel];
+    for (int i = 0; i < nmodel; i++) {
+      args[i].m = m[i];
+      args[i].d = d[i];
+      args[i].nroll = nroll;
+      args[i].nstep = nstep;
+      args[i].control_spec = control_spec;
+      args[i].state0 = state0[i];
+      args[i].warmstart0 = warmstart0[i];
+      args[i].control = control[i];
+      args[i].state = state[i];
+      args[i].sensordata = sensordata[i];
+
+      mju_defaultTask(&tasks[i]);
+      tasks[i].func = &_unsafe_rollout_with_arg;
+      tasks[i].args = &args[i];
+      mju_threadPoolEnqueue(pool, &tasks[i]);
+    }
+
+    for (int i = 0; i < nmodel; i++) {
+      mju_taskJoin(&tasks[i]);
+    }
+
+    mju_threadPoolDestroy(pool);
   }
 }
 
@@ -211,12 +262,18 @@ PYBIND11_MODULE(_rollout, pymodule) {
          std::optional<py::list> warmstart0,
          std::optional<py::list> control,
          std::optional<py::list> state,
-         std::optional<py::list> sensordata
+         std::optional<py::list> sensordata,
+         std::optional<int> nthread
          ) {
 
         // check that some steps need to be taken, return if not
         if (nroll < 1 || nstep < 1) {
           return;
+        }
+
+        int num_threads = 0;
+        if (nthread.has_value()) {
+          num_threads = *nthread;
         }
 
         int nmodel = py::len(m);
@@ -257,7 +314,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
           // call unsafe rollout function
           InterceptMjErrors(_unsafe_rollouts)(
               model_ptrs, data_ptrs, nmodel, nroll, nstep, control_spec, state0_ptrs,
-              warmstart0_ptrs, control_ptrs, state_ptrs, sensordata_ptrs);
+              warmstart0_ptrs, control_ptrs, state_ptrs, sensordata_ptrs, num_threads);
         }
       },
       py::arg("model"),
@@ -270,6 +327,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
       py::arg("control")    = py::none(),
       py::arg("state")      = py::none(),
       py::arg("sensordata") = py::none(),
+      py::arg("nthread") = py::none(),
       py::doc(rollout_doc)
   );
 }
