@@ -206,7 +206,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
   pymodule.def(
       "rollout",
       [](py::list m, py::list d,
-         int nmodel, int nroll, int nstep, unsigned int control_spec, // TODO remove nmodel
+         int nroll, int nstep, unsigned int control_spec,
          py::list state0,
          std::optional<py::list> warmstart0,
          std::optional<py::list> control,
@@ -219,6 +219,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
           return;
         }
 
+        int nmodel = py::len(m);
         const raw::MjModel* model_ptrs[nmodel];
         raw::MjData* data_ptrs[nmodel];
         const mjtNum* state0_ptrs[nmodel];
@@ -261,7 +262,6 @@ PYBIND11_MODULE(_rollout, pymodule) {
       },
       py::arg("model"),
       py::arg("data"),
-      py::arg("nmodel"),
       py::arg("nroll"),
       py::arg("nstep"),
       py::arg("control_spec"),

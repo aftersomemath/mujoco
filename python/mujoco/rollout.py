@@ -78,6 +78,13 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
                      initial_warmstart, control, state, sensordata)
     return state, sensordata
 
+  # check model, data for consistent length
+  if type(model) == list:
+    if type(data) != list:
+      raise ValueError('model and data must be single instances or lists')
+    if len(model) != len(data):
+      raise ValueError('model and data must be the same length')
+
   # check control_spec
   if control_spec & ~mujoco.mjtState.mjSTATE_USER.value:
     raise ValueError('control_spec can only contain bits in mjSTATE_USER')
@@ -171,7 +178,7 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
   sensordata = _restore_none(sensordata, sensordata_none)
 
   # call rollout
-  _rollout.rollout(model, data, len(model), nroll, nstep, control_spec, initial_state,
+  _rollout.rollout(model, data, nroll, nstep, control_spec, initial_state,
                    initial_warmstart, control, state, sensordata)
 
   # return outputs
