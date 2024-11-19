@@ -182,14 +182,19 @@ void* _unsafe_rollout_with_arg(void* arg) {
 
 // Dispatch rollouts of multiple models through _unsafe_rollout
 // Arguments have the same properties as _unsafe_rollout
-void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int nroll, int nstep, unsigned int control_spec,
+void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int* nroll, int* nstep, unsigned int* control_spec,
                       const mjtNum** state0, const mjtNum** warmstart0, const mjtNum** control,
                       mjtNum** state, mjtNum** sensordata,
                       int nthread) {
 
   if (nthread == 0) {
       for (int i = 0; i < nmodel; i++) {
-        _unsafe_rollout(m[i], d[i], nroll, nstep, control_spec, 
+          // check that some steps need to be taken, return if not
+          if (nroll[i] < 1 || nstep[i] < 1) {
+            return;
+          }
+
+        _unsafe_rollout(m[i], d[i], nroll[i], nstep[i], control_spec[i], 
           state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
       }
   }
@@ -201,9 +206,9 @@ void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int nroll, int 
     for (int i = 0; i < nmodel; i++) {
       args[i].m = m[i];
       args[i].d = d[i];
-      args[i].nroll = nroll;
-      args[i].nstep = nstep;
-      args[i].control_spec = control_spec;
+      args[i].nroll = nroll[i];
+      args[i].nstep = nstep[i];
+      args[i].control_spec = control_spec[i];
       args[i].state0 = state0[i];
       args[i].warmstart0 = warmstart0[i];
       args[i].control = control[i];
@@ -257,7 +262,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
   pymodule.def(
       "rollout",
       [](py::list m, py::list d,
-         int nroll, int nstep, unsigned int control_spec,
+         py::list nroll, py::list nstep, py::list control_spec,
          py::list state0,
          std::optional<py::list> warmstart0,
          std::optional<py::list> control,
@@ -265,12 +270,6 @@ PYBIND11_MODULE(_rollout, pymodule) {
          std::optional<py::list> sensordata,
          std::optional<int> nthread
          ) {
-
-        // check that some steps need to be taken, return if not
-        if (nroll < 1 || nstep < 1) {
-          return;
-        }
-
         int num_threads = 0;
         if (nthread.has_value()) {
           num_threads = *nthread;
@@ -279,31 +278,37 @@ PYBIND11_MODULE(_rollout, pymodule) {
         int nmodel = py::len(m);
         const raw::MjModel* model_ptrs[nmodel];
         raw::MjData* data_ptrs[nmodel];
+        unsigned int control_spec_ints[nmodel];
+        int nroll_ints[nmodel];
+        int nstep_ints[nmodel];
         const mjtNum* state0_ptrs[nmodel];
         const mjtNum* warmstart0_ptrs[nmodel];
         const mjtNum* control_ptrs[nmodel];
         mjtNum* state_ptrs[nmodel];
         mjtNum* sensordata_ptrs[nmodel];
-        for (unsigned int i = 0; i < nmodel; i++) {
+        for (unsigned int i = 0; i < nmodel; i++) {          
           // get sizes
           const raw::MjModel* model = m[i].cast<const MjModelWrapper*>()->get();
           raw::MjData* data = d[i].cast<MjDataWrapper*>()->get();
 
+          control_spec_ints[i] = control_spec[i].cast<unsigned int>();
+          nroll_ints[i] = nroll[i].cast<int>(); 
+          nstep_ints[i] = nstep[i].cast<int>();
           int nstate = mj_stateSize(model, mjSTATE_FULLPHYSICS);
-          int ncontrol = mj_stateSize(model, control_spec);
+          int ncontrol = mj_stateSize(model, control_spec_ints[i]);
 
           // get raw pointers
           model_ptrs[i] = model;
           data_ptrs[i] = data;
 
-          state0_ptrs[i] = get_array_ptr(state0, i, "state0", nroll, 1, nstate);
-          warmstart0_ptrs[i] = get_array_ptr(warmstart0, i, "warmstart0", nroll,
+          state0_ptrs[i] = get_array_ptr(state0, i, "state0", nroll_ints[i], 1, nstate);
+          warmstart0_ptrs[i] = get_array_ptr(warmstart0, i, "warmstart0", nroll_ints[i],
                                                  1, model->nv);
-          control_ptrs[i] = get_array_ptr(control, i, "control", nroll,
-                                              nstep, ncontrol);
-          state_ptrs[i] = get_array_ptr(state, i, "state", nroll, nstep, nstate);
-          sensordata_ptrs[i] = get_array_ptr(sensordata, i, "sensordata", nroll,
-                                                 nstep, model->nsensordata);
+          control_ptrs[i] = get_array_ptr(control, i, "control", nroll_ints[i],
+                                              nstep_ints[i], ncontrol);
+          state_ptrs[i] = get_array_ptr(state, i, "state", nroll_ints[i], nstep_ints[i], nstate);
+          sensordata_ptrs[i] = get_array_ptr(sensordata, i, "sensordata", nroll_ints[i],
+                                                 nstep_ints[i], model->nsensordata);
         }
 
         // perform rollouts
@@ -313,7 +318,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
 
           // call unsafe rollout function
           InterceptMjErrors(_unsafe_rollouts)(
-              model_ptrs, data_ptrs, nmodel, nroll, nstep, control_spec, state0_ptrs,
+              model_ptrs, data_ptrs, nmodel, nroll_ints, nstep_ints, control_spec_ints, state0_ptrs,
               warmstart0_ptrs, control_ptrs, state_ptrs, sensordata_ptrs, num_threads);
         }
       },

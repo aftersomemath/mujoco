@@ -27,10 +27,10 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
             initial_state: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             control: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             *,  # require subsequent arguments to be named
-            control_spec: int = mujoco.mjtState.mjSTATE_CTRL.value,
+            control_spec: Union[int, list[int]] = mujoco.mjtState.mjSTATE_CTRL.value,
             skip_checks: bool = False,
-            nroll: Optional[int] = None, # TODO per rollout?
-            nstep: Optional[int] = None, # TODO per rollout
+            nroll: Optional[Union[int, list[int]]] = None,
+            nstep: Optional[Union[int, list[int]]] = None,
             initial_warmstart: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             state: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
             sensordata: Optional[Union[npt.ArrayLike, list[npt.ArrayLike]]] = None,
@@ -86,15 +86,7 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
     if len(model) != len(data):
       raise ValueError('model and data must be the same length')
 
-  # check control_spec
-  if control_spec & ~mujoco.mjtState.mjSTATE_USER.value:
-    raise ValueError('control_spec can only contain bits in mjSTATE_USER')
-
   # check types
-  if nroll and not isinstance(nroll, int):
-    raise ValueError('nroll must be an integer')
-  if nstep and not isinstance(nstep, int):
-    raise ValueError('nstep must be an integer')
   if nthread and not isinstance(nthread, int):
     raise ValueError('nthread must be an integer')
 
@@ -116,13 +108,25 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
   sensordata_none = sensordata is None
 
   # convert optional args allowed to be single objects to lists
+  control_spec      = _ensure_in_list(control_spec, len(model))
+  nroll             = _ensure_in_list(nroll, len(model))
+  nstep             = _ensure_in_list(nstep, len(model))
   control           = _ensure_in_list(control, len(model))
   initial_warmstart = _ensure_in_list(initial_warmstart, len(model))
   state             = _ensure_in_list(state, len(model))
   sensordata        = _ensure_in_list(sensordata, len(model))
 
   for i in range(len(model)):
+    # check control_spec
+    if control_spec[i] & ~mujoco.mjtState.mjSTATE_USER.value:
+      raise ValueError('control_spec can only contain bits in mjSTATE_USER')
+
     # check types
+    if nroll[i] and not isinstance(nroll[i], int):
+      raise ValueError('nroll must be an integer')
+    if nstep[i] and not isinstance(nstep[i], int):
+      raise ValueError('nstep must be an integer')
+
     _check_must_be_numeric(
         initial_state=initial_state[i],
         initial_warmstart=initial_warmstart[i],
@@ -151,13 +155,13 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
     # check trailing dimensions
     nstate = mujoco.mj_stateSize(model[i], mujoco.mjtState.mjSTATE_FULLPHYSICS.value)
     _check_trailing_dimension(nstate, initial_state=initial_state[i], state=state[i])
-    ncontrol = mujoco.mj_stateSize(model[i], control_spec)
+    ncontrol = mujoco.mj_stateSize(model[i], control_spec[i])
     _check_trailing_dimension(ncontrol, control=control[i])
     _check_trailing_dimension(model[i].nv, initial_warmstart=initial_warmstart[i])
     _check_trailing_dimension(model[i].nsensordata, sensordata=sensordata[i])
 
     # infer nroll, check for incompatibilities
-    nroll = _infer_dimension(0, nroll or 1,
+    nroll[i] = _infer_dimension(0, nroll[i] or 1,
                              initial_state=initial_state[i],
                              initial_warmstart=initial_warmstart[i],
                              control=control[i],
@@ -165,21 +169,21 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
                              sensordata=sensordata[i])
 
     # infer nstep, check for incompatibilities
-    nstep = _infer_dimension(1, nstep or 1,
-                             control=control[i],
-                             state=state[i],
-                             sensordata=sensordata[i])
+    nstep[i] = _infer_dimension(1, nstep[i] or 1,
+                                control=control[i],
+                                state=state[i],
+                                sensordata=sensordata[i])
 
     # tile input arrays if required (singleton expansion)
-    initial_state[i] = _tile_if_required(initial_state[i], nroll)
-    initial_warmstart[i] = _tile_if_required(initial_warmstart[i], nroll)
-    control[i] = _tile_if_required(control[i], nroll, nstep)
+    initial_state[i] = _tile_if_required(initial_state[i], nroll[i])
+    initial_warmstart[i] = _tile_if_required(initial_warmstart[i], nroll[i])
+    control[i] = _tile_if_required(control[i], nroll[i], nstep[i])
 
     # allocate output if not provided
     if state[i] is None:
-      state[i] = np.empty((nroll, nstep, nstate))
+      state[i] = np.empty((nroll[i], nstep[i], nstate))
     if sensordata[i] is None:
-      sensordata[i] = np.empty((nroll, nstep, model[i].nsensordata))
+      sensordata[i] = np.empty((nroll[i], nstep[i], model[i].nsensordata))
 
   control = _restore_none(control, control_none)
   initial_warmstart = _restore_none(initial_warmstart, initial_warmstart_none)
@@ -218,11 +222,11 @@ def _check_trailing_dimension(dim, **kwargs):
           f'trailing dimension of {key} must be {dim}, got {value.shape[-1]}'
       )
 
-def _ensure_in_list(arg, len_none=None):
+def _ensure_in_list(arg, length=1):
   if arg is None:
-    return [arg]*len_none
+    return [arg]*length
   elif type(arg) != list:
-    return [arg]
+    return [arg]*length
   else:
     return arg
 
