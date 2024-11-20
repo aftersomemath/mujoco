@@ -182,7 +182,7 @@ void* _unsafe_rollout_with_arg(void* arg) {
 
 // Dispatch rollouts of multiple models through _unsafe_rollout
 // Arguments have the same properties as _unsafe_rollout
-void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int* nroll, int* nstep, unsigned int* control_spec,
+void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int ndata, int* nroll, int* nstep, unsigned int* control_spec,
                       const mjtNum** state0, const mjtNum** warmstart0, const mjtNum** control,
                       mjtNum** state, mjtNum** sensordata,
                       int nthread) {
@@ -198,7 +198,7 @@ void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int* nroll, int
           state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
       }
   }
-  else {
+  else if (nmodel == ndata) {
     mjThreadPool* pool = mju_threadPoolCreate(nthread);
 
     mjTask tasks[nmodel];
@@ -226,6 +226,44 @@ void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int* nroll, int
     }
 
     mju_threadPoolDestroy(pool);
+  }
+  else { // nmodel != ndata, therefore one thread per ndata
+    mjThreadPool* threads[ndata];
+    for (int i = 0; i < ndata; i++) {
+      threads[i] = mju_threadPoolCreate(1);
+      // mju_bindThreadPool(d[i], threads[i]);
+    }
+
+    mjTask tasks[nmodel];
+    UnsafeRolloutArgs args[nmodel];
+    for (int i = 0; i < nmodel; i++) {
+      int thread_index = i * nthread / nmodel;
+      // std::cout << i << " " << thread_index << std::endl;
+
+      args[i].m = m[i];
+      args[i].d = d[thread_index];
+      args[i].nroll = nroll[i];
+      args[i].nstep = nstep[i];
+      args[i].control_spec = control_spec[i];
+      args[i].state0 = state0[i];
+      args[i].warmstart0 = warmstart0[i];
+      args[i].control = control[i];
+      args[i].state = state[i];
+      args[i].sensordata = sensordata[i];
+
+      mju_defaultTask(&tasks[i]);
+      tasks[i].func = &_unsafe_rollout_with_arg;
+      tasks[i].args = &args[i];
+      mju_threadPoolEnqueue(threads[thread_index], &tasks[i]);
+    }
+
+    for (int i = 0; i < nmodel; i++) {
+      mju_taskJoin(&tasks[i]);
+    }
+
+    for (int i = 0; i < ndata; i++) {
+      mju_threadPoolDestroy(threads[i]);
+    }
   }
 }
 
@@ -276,6 +314,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
         }
 
         int nmodel = py::len(m);
+        int ndata = py::len(d);
         const raw::MjModel* model_ptrs[nmodel];
         raw::MjData* data_ptrs[nmodel];
         unsigned int control_spec_ints[nmodel];
@@ -286,10 +325,15 @@ PYBIND11_MODULE(_rollout, pymodule) {
         const mjtNum* control_ptrs[nmodel];
         mjtNum* state_ptrs[nmodel];
         mjtNum* sensordata_ptrs[nmodel];
+
+        for (unsigned int i = 0; i < ndata; i++) {
+          raw::MjData* data = d[i].cast<MjDataWrapper*>()->get();
+          data_ptrs[i] = data;
+        }
+
         for (unsigned int i = 0; i < nmodel; i++) {          
           // get sizes
           const raw::MjModel* model = m[i].cast<const MjModelWrapper*>()->get();
-          raw::MjData* data = d[i].cast<MjDataWrapper*>()->get();
 
           control_spec_ints[i] = control_spec[i].cast<unsigned int>();
           nroll_ints[i] = nroll[i].cast<int>(); 
@@ -299,7 +343,6 @@ PYBIND11_MODULE(_rollout, pymodule) {
 
           // get raw pointers
           model_ptrs[i] = model;
-          data_ptrs[i] = data;
 
           state0_ptrs[i] = get_array_ptr(state0, i, "state0", nroll_ints[i], 1, nstate);
           warmstart0_ptrs[i] = get_array_ptr(warmstart0, i, "warmstart0", nroll_ints[i],
@@ -318,7 +361,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
 
           // call unsafe rollout function
           InterceptMjErrors(_unsafe_rollouts)(
-              model_ptrs, data_ptrs, nmodel, nroll_ints, nstep_ints, control_spec_ints, state0_ptrs,
+              model_ptrs, data_ptrs, nmodel, ndata, nroll_ints, nstep_ints, control_spec_ints, state0_ptrs,
               warmstart0_ptrs, control_ptrs, state_ptrs, sensordata_ptrs, num_threads);
         }
       },

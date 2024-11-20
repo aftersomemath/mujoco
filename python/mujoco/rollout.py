@@ -80,11 +80,11 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
     return state, sensordata
 
   # check model, data for consistent length
-  if isinstance(model, list):
-    if not isinstance(data, list):
-      raise ValueError('model and data must be single instances or lists')
-    if len(model) != len(data):
-      raise ValueError('model and data must be the same length')
+  # if isinstance(model, list):
+  #   if not isinstance(data, list):
+  #     raise ValueError('model and data must be single instances or lists')
+  #   if len(model) != len(data):
+  #     raise ValueError('model and data must be the same length')
 
   # check types
   if nthread and not isinstance(nthread, int):
@@ -95,9 +95,16 @@ def rollout(model: Union[mujoco.MjModel, list[mujoco.MjModel]],
   data = _ensure_in_list(data)
   if not initial_state:
     initial_state = []
-    for m, d in zip(model, data):
-      initial_state.append(np.zeros((mujoco.mj_stateSize(m, mujoco.mjtState.mjSTATE_FULLPHYSICS),)))
-      mujoco.mj_getState(m, d, initial_state[-1], mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    if len(model) == len(data):
+      for m, d in zip(model, data):
+        initial_state.append(np.zeros((mujoco.mj_stateSize(m, mujoco.mjtState.mjSTATE_FULLPHYSICS),)))
+        mujoco.mj_getState(m, d, initial_state[-1], mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    else:
+      # Assume all mjModel have the same state, corresponding to the first mjData
+      initial_state.append(np.zeros((mujoco.mj_stateSize(model[0], mujoco.mjtState.mjSTATE_FULLPHYSICS),)))
+      mujoco.mj_getState(model[0], data[0], initial_state[-1], mujoco.mjtState.mjSTATE_FULLPHYSICS)
+      for i in range(len(model) - 1):
+        initial_state.append(np.copy(initial_state[0]))
   else:
     initial_state = _ensure_in_list(initial_state)
 
