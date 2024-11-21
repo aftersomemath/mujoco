@@ -25,11 +25,131 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <iostream>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
+
+#include <absl/base/attributes.h>
+
 namespace mujoco::python {
 
 namespace {
 
 namespace py = ::pybind11;
+
+// ThreadPool class
+class ThreadPool {
+ public:
+  // constructor
+  explicit ThreadPool(int num_threads);
+
+  // destructor
+  ~ThreadPool();
+
+  int NumThreads() const { return threads_.size(); }
+
+  // returns an ID between 0 and NumThreads() - 1. must be called within
+  // worker thread (returns -1 if not).
+  static int WorkerId() { return worker_id_; }
+
+  // ----- methods ----- //
+  // set task for threadpool
+  void Schedule(std::function<void()> task);
+
+  // return number of tasks completed
+  std::uint64_t GetCount() { return ctr_; }
+
+  // reset count to zero
+  void ResetCount() { ctr_ = 0; }
+
+  // wait for count, then return
+  void WaitCount(int value) {
+    std::unique_lock<std::mutex> lock(m_);
+    cv_ext_.wait(lock, [&]() { return this->GetCount() >= value; });
+  }
+
+ private:
+  // ----- methods ----- //
+
+  // execute task with available thread
+  void WorkerThread(int i);
+
+  ABSL_CONST_INIT static thread_local int worker_id_;
+
+  // ----- members ----- //
+  std::vector<std::thread> threads_;
+  std::mutex m_;
+  std::condition_variable cv_in_;
+  std::condition_variable cv_ext_;
+  std::queue<std::function<void()>> queue_;
+  std::uint64_t ctr_;
+};
+
+// Copied from https://github.com/google-deepmind/mujoco_mpc/blob/main/mjpc/threadpool.cc
+ABSL_CONST_INIT thread_local int ThreadPool::worker_id_ = -1;
+
+// ThreadPool constructor
+ThreadPool::ThreadPool(int num_threads) : ctr_(0) {
+  for (int i = 0; i < num_threads; i++) {
+    threads_.push_back(std::thread(&ThreadPool::WorkerThread, this, i));
+  }
+}
+
+// ThreadPool destructor
+ThreadPool::~ThreadPool() {
+  {
+    std::unique_lock<std::mutex> lock(m_);
+    for (int i = 0; i < threads_.size(); i++) {
+      queue_.push(nullptr);
+    }
+    cv_in_.notify_all();
+  }
+  for (auto& thread : threads_) {
+    thread.join();
+  }
+}
+
+// ThreadPool scheduler
+void ThreadPool::Schedule(std::function<void()> task) {
+  std::unique_lock<std::mutex> lock(m_);
+  queue_.push(std::move(task));
+  cv_in_.notify_one();
+}
+
+// ThreadPool worker
+void ThreadPool::WorkerThread(int i) {
+  worker_id_ = i;
+  while (true) {
+    auto task = [&]() {
+      std::unique_lock<std::mutex> lock(m_);
+      cv_in_.wait(lock, [&]() { return !queue_.empty(); });
+      std::function<void()> task = std::move(queue_.front());
+      queue_.pop();
+      cv_in_.notify_one();
+      return task;
+    }();
+    if (task == nullptr) {
+      {
+        std::unique_lock<std::mutex> lock(m_);
+        ++ctr_;
+        cv_ext_.notify_one();
+      }
+      break;
+    }
+    task();
+
+    {
+      std::unique_lock<std::mutex> lock(m_);
+      ++ctr_;
+      cv_ext_.notify_one();
+    }
+  }
+}
 
 // NOLINTBEGIN(whitespace/line_length)
 
@@ -186,7 +306,7 @@ void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int ndata, int*
                       const mjtNum** state0, const mjtNum** warmstart0, const mjtNum** control,
                       mjtNum** state, mjtNum** sensordata,
                       int nthread) {
-
+  bool stdthread = true;
   if (nthread == 0) {
       for (int i = 0; i < nmodel; i++) {
           // check that some steps need to be taken, return if not
@@ -197,6 +317,36 @@ void _unsafe_rollouts(const mjModel** m, mjData** d, int nmodel, int ndata, int*
         _unsafe_rollout(m[i], d[i], nroll[i], nstep[i], control_spec[i], 
           state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
       }
+  }
+  else if (nmodel == ndata && stdthread) {
+    // std::cout << "nmodel == ndata && stdthread" << std::endl;
+    ThreadPool pool = ThreadPool(nthread);
+
+    for (int i = 0; i < nmodel; i++) {
+      auto task = [=](void) {
+        _unsafe_rollout(m[i], d[i],
+          nroll[i], nstep[i], control_spec[i],
+          state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
+      };
+      pool.Schedule(task);
+    }
+
+    pool.WaitCount(nmodel);
+  }
+  else if (nmodel != ndata && stdthread) {
+    // std::cout << "nmodel != ndata && stdthread" << std::endl;
+    ThreadPool pool = ThreadPool(nthread);
+
+    for (int i = 0; i < nmodel; i++) {
+      auto task = [=, &pool](void) {
+        _unsafe_rollout(m[i], d[pool.WorkerId()],
+          nroll[i], nstep[i], control_spec[i],
+          state0[i], warmstart0[i], control[i], state[i], sensordata[i]);
+      };
+      pool.Schedule(task);
+    }
+
+    pool.WaitCount(nmodel);
   }
   else if (nmodel == ndata) {
     mjThreadPool* pool = mju_threadPoolCreate(nthread);
