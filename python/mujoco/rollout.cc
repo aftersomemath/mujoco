@@ -267,11 +267,13 @@ void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData
                               const mjtNum* state0, const mjtNum* warmstart0, const mjtNum* control,
                               mjtNum* state, mjtNum* sensordata,
                               int nthread, int chunk_size) {
-  int njobs = nroll / chunk_size;
+  int nfulljobs = nroll / chunk_size;
   int chunk_remainder = nroll % chunk_size;
+  int njobs = nfulljobs;
+  if (chunk_remainder > 0) njobs++;
 
   ThreadPool pool = ThreadPool(nthread);
-  for (int j = 0; j < njobs; j++) {
+  for (int j = 0; j < nfulljobs; j++) {
     auto task = [=, &m, &d, &pool](void) {
       _unsafe_rollout(m, d[pool.WorkerId()], j*chunk_size, (j+1)*chunk_size,
         nstep, control_spec, state0, warmstart0, control, state, sensordata);
@@ -281,13 +283,13 @@ void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData
 
   if (chunk_remainder > 0) {
     auto task = [=, &m, &d, &pool](void) {
-      _unsafe_rollout(m, d[pool.WorkerId()], njobs*chunk_size, njobs*chunk_size+chunk_remainder,
+      _unsafe_rollout(m, d[pool.WorkerId()], nfulljobs*chunk_size, nfulljobs*chunk_size+chunk_remainder,
         nstep, control_spec, state0, warmstart0, control, state, sensordata);
     };
     pool.Schedule(task);
   }
 
-  pool.WaitCount(nroll);
+  pool.WaitCount(njobs);
 }
 
 // NOLINTEND(whitespace/line_length)
@@ -368,7 +370,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
 
           // call unsafe rollout function
           if (nthread > 1) {
-            int chunk_size = std::max(1, nroll/(10 * nthread));
+            int chunk_size = std::max(1, nroll / (10 * nthread));
             InterceptMjErrors(_unsafe_rollout_threaded)(
                 model_ptrs, data_ptrs, nroll, nstep, control_spec, state0_ptr,
                 warmstart0_ptr, control_ptr, state_ptr, sensordata_ptr,
