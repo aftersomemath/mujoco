@@ -28,7 +28,6 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
-#include <iostream>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -368,7 +367,7 @@ PYBIND11_MODULE(_rollout, pymodule) {
           py::gil_scoped_release no_gil;
 
           // call unsafe rollout function
-          if (nthread > 0) {
+          if (nthread > 1) {
             int chunk_size = std::max(1, nroll/(10 * nthread));
             InterceptMjErrors(_unsafe_rollout_threaded)(
                 model_ptrs, data_ptrs, nroll, nstep, control_spec, state0_ptr,
