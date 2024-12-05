@@ -64,7 +64,7 @@ class PythonThreading:
 
 def benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml'):
     nthread = 24
-    nroll = [int(1e0), int(1e1), int(1e2)]
+    nroll = [int(1e0), int(1e1), int(1e2), int(2e2)]
     nstep = [int(1e0), int(1e1), int(1e2), int(2e2)]
 
     print('making structures')
@@ -84,7 +84,7 @@ def benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml'
         for nstep_i in nstep:
             nt_res = timeit.timeit(lambda: rollout.rollout(m_list[:nroll_i], d_list, initial_state[:nroll_i], nstep=nstep_i), number=10)
             pt_res = timeit.timeit(lambda: pt.run(m_list[:nroll_i], initial_state[:nroll_i], nstep_i), number=10)
-            print('{:03d} {:03d} {:0.3f} {:0.3f} {:0.3f}'.format(nroll_i, nstep_i, nt_res, pt_res, nt_res / pt_res))
+            print('nroll: {:04d} nstep: {:04d} nt: {:0.3f} pt: {:0.3f} nt/pt: {:0.3f}'.format(nroll_i, nstep_i, nt_res, pt_res, nt_res / pt_res))
 
     # Generate plots
 

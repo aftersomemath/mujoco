@@ -262,6 +262,7 @@ void _unsafe_rollout(std::vector<const mjModel*>& m, mjData* d, int start_roll, 
 }
 
 // C-style threaded version of _unsafe_rollout
+static ThreadPool* pool = nullptr;
 void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData*>& d,
                               int nroll, int nstep, unsigned int control_spec,
                               const mjtNum* state0, const mjtNum* warmstart0, const mjtNum* control,
@@ -272,24 +273,34 @@ void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData
   int njobs = nfulljobs;
   if (chunk_remainder > 0) njobs++;
 
-  ThreadPool pool = ThreadPool(nthread);
+  if (pool == nullptr) {
+    pool = new ThreadPool(nthread);
+  }
+  else if (pool->NumThreads() != nthread) {
+    delete pool; // TODO make sure pool is shutdown correctly
+    pool = new ThreadPool(nthread);
+  } else {
+    pool->ResetCount();
+  }
+
   for (int j = 0; j < nfulljobs; j++) {
-    auto task = [=, &m, &d, &pool](void) {
-      _unsafe_rollout(m, d[pool.WorkerId()], j*chunk_size, (j+1)*chunk_size,
+    auto task = [=, &m, &d](void) {
+      int id = pool->WorkerId();
+      _unsafe_rollout(m, d[id], j*chunk_size, (j+1)*chunk_size,
         nstep, control_spec, state0, warmstart0, control, state, sensordata);
     };
-    pool.Schedule(task);
+    pool->Schedule(task);
   }
 
   if (chunk_remainder > 0) {
-    auto task = [=, &m, &d, &pool](void) {
-      _unsafe_rollout(m, d[pool.WorkerId()], nfulljobs*chunk_size, nfulljobs*chunk_size+chunk_remainder,
+    auto task = [=, &m, &d](void) {
+      _unsafe_rollout(m, d[pool->WorkerId()], nfulljobs*chunk_size, nfulljobs*chunk_size+chunk_remainder,
         nstep, control_spec, state0, warmstart0, control, state, sensordata);
     };
-    pool.Schedule(task);
+    pool->Schedule(task);
   }
 
-  pool.WaitCount(njobs);
+  pool->WaitCount(njobs);
 }
 
 // NOLINTEND(whitespace/line_length)
