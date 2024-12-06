@@ -15,6 +15,7 @@
 """benchmarks for rollout function."""
 
 import concurrent.futures
+import os
 import threading
 import time
 import timeit
@@ -63,52 +64,67 @@ class PythonThreading:
     for future in concurrent.futures.as_completed(futures):
       future.result()
 
-def benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml'):
-    nthread = 24
-    nroll = [int(1e0), int(1e1), int(1e2), int(2e2)]
-    nstep = [int(1e0), int(1e1), int(1e2), int(2e2)]
+def benchmark_rollout(model_file, nthread=os.cpu_count()):
+    print('\n', model_file)
+    bench_steps = int(1e4) # Run approximately bench_steps per thread
 
-    print('making structures')
+    # A grid search
+    nroll = [int(1e0), int(1e1), int(1e2), int(1e3)]
+    nstep = [int(1e0), int(1e1), int(1e2), int(1e3)]
+    nnroll, nnstep = np.meshgrid(nroll, nstep)
+    nroll_nstep_grid = np.stack((nnroll.flatten(), nnstep.flatten()), axis=1)
+
+    # Typical nroll/nstep for sysid, rl, mpc respectively
+    nroll = [50, 3000, 100]
+    nstep = [1000, 1, 50]
+    nroll_nstep_app = np.stack((nroll, nstep), axis=1)
+
+    nroll_nstep = np.vstack((nroll_nstep_grid, nroll_nstep_app))
+
     m = mujoco.MjModel.from_xml_path(model_file)
-    m_list = [m]*nroll[-1] # models do not need to be copied
+    print('nv:', m.nv)
+
+    m_list = [m]*np.max(nroll) # models do not need to be copied
     d_list = [mujoco.MjData(m) for i in range(nthread)]
 
     initial_state = np.zeros((mujoco.mj_stateSize(m, mujoco.mjtState.mjSTATE_FULLPHYSICS),))
     mujoco.mj_getState(m, d_list[0], initial_state, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-    initial_state = np.tile(initial_state, (nroll[-1], 1))
+    initial_state = np.tile(initial_state, (np.max(nroll), 1))
 
-    print('initializing thread pools')
     pt = PythonThreading(m_list[0], len(d_list))
 
-    print('running benchmark')
-    for nroll_i in nroll:
-        print('roll', nroll_i)
-        for nstep_i in nstep:
-            number = int((1*nroll[-1] * nstep[-1]) / nroll_i / nstep_i)
-            number = max(20, number)
+    for i in range(nroll_nstep.shape[0]):
+      nroll_i = int(nroll_nstep[i, 0])
+      nstep_i = int(nroll_nstep[i, 1])
 
-            nt_res = timeit.timeit(lambda: rollout.rollout(m_list[:nroll_i], d_list, initial_state[:nroll_i], skip_checks=True, nstep=nstep_i), number=number)
-            pt_res = timeit.timeit(lambda: pt.run(m_list[:nroll_i], initial_state[:nroll_i], nstep_i), number=number)
-            nt_res /= number
-            pt_res /= number
+      nbench = max(1, int(np.round(min(nthread, nroll_i) * bench_steps / nstep_i / nroll_i)))
 
-            # times = [time.time()]
-            # for i in range(number):
-            #   rollout.rollout(m_list[:nroll_i], d_list, initial_state[:nroll_i], skip_checks=True, nstep=nstep_i)
-            #   times.append(time.time())
-            # dt = np.diff(times)
-            # nt_res = np.mean(dt)
+      times = [time.time()]
+      for i in range(nbench):
+        rollout.rollout(m_list[:nroll_i], d_list, initial_state[:nroll_i], skip_checks=True, nstep=nstep_i)
+        times.append(time.time())
+      dt = np.diff(times)
+      nt_stats = (np.min(dt), np.max(dt), np.mean(dt), np.std(dt))
 
-            # times = [time.time()]
-            # for i in range(number):
-            #   pt.run(m_list[:nroll_i], initial_state[:nroll_i], nstep_i)
-            #   times.append(time.time())
-            # dt = np.diff(times)
-            # pt_res = np.mean(dt)
+      times = [time.time()]
+      for i in range(nbench):
+        pt.run(m_list[:nroll_i], initial_state[:nroll_i], nstep_i)
+        times.append(time.time())
+      dt = np.diff(times)
+      pt_stats = (np.min(dt), np.max(dt), np.mean(dt), np.std(dt))
 
-            print('nroll: {:04d} nstep: {:04d} nt: {:0.3f} pt: {:0.3f} nt/pt: {:0.3f} {}'.format(nroll_i, nstep_i, nt_res, pt_res, nt_res / pt_res, number))
-
-    # TODO generate plots
+      print('nbench: {:06d} nroll: {:04d} nstep: {:04d} '
+            'nt_min: {:0.4f} nt_max: {:0.4f} nt_mean: {:0.4f} nt_std: {:0.4f} '
+            'pt_min: {:0.4f} pt_max: {:0.4f} pt_mean: {:0.4f} pt_std: {:0.4f} '
+            'nt/pt min: {:0.3f} nt/pt mean: {:0.3f}'.format(
+        nbench, nroll_i, nstep_i,
+        *nt_stats, *pt_stats,
+        nt_stats[0] / pt_stats[0], nt_stats[2] / pt_stats[2]))
 
 if __name__ == '__main__':
-  benchmark_rollout()
+  benchmark_rollout(model_file='../../../dm_control/dm_control/suite/hopper.xml')
+  benchmark_rollout(model_file='../../../mujoco_menagerie/unitree_go2/scene.xml')
+  benchmark_rollout(model_file='../../model/humanoid/humanoid.xml')
+  benchmark_rollout(model_file='../../model/humanoid/humanoid100.xml')
+  # benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml')
+  # benchmark_rollout(model_file='../../model/humanoid/100_humanoids.xml')
