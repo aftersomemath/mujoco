@@ -42,7 +42,15 @@ class PythonThreading:
 
   def run(self, model_list, initial_state, nstep):
     nroll = len(model_list)
+
+    # Divide jobs evenly across threads (as in test)
+    # better for very wide rollouts
+    # chunk_size = max(1, nroll // self.num_workers)
+
+    # Divide jobs across threads with a chunksize 1/10th of the even amount
+    # new strategy, helps with load balancing
     chunk_size = max(1, nroll // (10 * self.num_workers))
+
     nfulljobs = nroll // chunk_size;
     chunk_remainder = nroll % chunk_size;
     njobs = nfulljobs
@@ -65,7 +73,8 @@ class PythonThreading:
       future.result()
 
 def benchmark_rollout(model_file, nthread=os.cpu_count()):
-    print('\n', model_file)
+    print()
+    print(model_file)
     bench_steps = int(1e4) # Run approximately bench_steps per thread
 
     # A grid search
@@ -122,9 +131,19 @@ def benchmark_rollout(model_file, nthread=os.cpu_count()):
         nt_stats[0] / pt_stats[0], nt_stats[2] / pt_stats[2]))
 
 if __name__ == '__main__':
+  print('============================================================')
+  print('small to medium models')
+  print('============================================================')
+
   benchmark_rollout(model_file='../../../dm_control/dm_control/suite/hopper.xml')
   benchmark_rollout(model_file='../../../mujoco_menagerie/unitree_go2/scene.xml')
   benchmark_rollout(model_file='../../model/humanoid/humanoid.xml')
+
+  print()
+  print('============================================================')
+  print('very large models')
+  print('============================================================')
+  benchmark_rollout(model_file='../../model/cards/cards.xml')
   benchmark_rollout(model_file='../../model/humanoid/humanoid100.xml')
-  # benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml')
+  benchmark_rollout(model_file='../../test/benchmark/testdata/humanoid200.xml')
   # benchmark_rollout(model_file='../../model/humanoid/100_humanoids.xml')
