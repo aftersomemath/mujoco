@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <chrono>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -162,25 +163,33 @@ void _unsafe_rollout(std::vector<const mjModel*>& m, mjData* d, int start_roll, 
 }
 
 // C-style threaded version of _unsafe_rollout
-static ThreadPool* pool = nullptr;
+// static ThreadPool* pool = nullptr;
 void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData*>& d,
                               int nroll, int nstep, unsigned int control_spec,
                               const mjtNum* state0, const mjtNum* warmstart0,
                               const mjtNum* control, mjtNum* state, mjtNum* sensordata,
                               int nthread, int chunk_size) {
+  auto clock = std::chrono::high_resolution_clock();
+
+  auto start = clock.now();
+
   int nfulljobs = nroll / chunk_size;
   int chunk_remainder = nroll % chunk_size;
   int njobs = (chunk_remainder > 0) ? nfulljobs + 1 : nfulljobs;
 
-  if (pool == nullptr) {
-    pool = new ThreadPool(nthread);
-  }
-  else if (pool->NumThreads() != nthread) {
-    delete pool;
-    pool = new ThreadPool(nthread);
-  } else {
-    pool->ResetCount();
-  }
+  // if (pool == nullptr) {
+  //   pool = new ThreadPool(nthread);
+  // }
+  // else if (pool->NumThreads() != nthread) {
+  //   delete pool;
+  //   pool = new ThreadPool(nthread);
+  // } else {
+  //   pool->ResetCount();
+  // }
+
+  auto pool_create_start = clock.now();
+  ThreadPool* pool = new ThreadPool(nthread);
+  auto pool_create_end = clock.now();
 
   for (int j = 0; j < nfulljobs; j++) {
     auto task = [=, &m, &d](void) {
@@ -200,6 +209,17 @@ void _unsafe_rollout_threaded(std::vector<const mjModel*>& m, std::vector<mjData
   }
 
   pool->WaitCount(njobs);
+
+  auto pool_delete_start = clock.now();
+  delete pool;
+  auto pool_delete_end = clock.now();
+
+  std::chrono::duration<double> total = pool_delete_end - start;
+  std::chrono::duration<double> create_pool = pool_create_end - pool_create_start;
+  std::chrono::duration<double> delete_pool = pool_delete_end - pool_delete_start;
+  std::chrono::duration<double> total_pool = create_pool + delete_pool;
+
+  std::cout << "total: " << total.count() << " pool: " << total_pool.count() << " ratio " << total_pool.count() / total.count() << std::endl;
 }
 
 // NOLINTEND(whitespace/line_length)
