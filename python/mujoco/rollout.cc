@@ -113,11 +113,13 @@ void _unsafe_rollout(std::vector<const mjModel*>& m, mjData* d, int start_roll,
     }
 
     // set initial state
-    mj_setState(m[r], d, state0 + r*nstate, mjSTATE_FULLPHYSICS);
+    mj_setState(m[r], d,
+      state0 + static_cast<size_t>(r) * static_cast<size_t>(nstate),
+      mjSTATE_FULLPHYSICS);
 
     // set warmstart accelerations
     if (warmstart0) {
-      mju_copy(d->qacc_warmstart, warmstart0 + r*nv, nv);
+      mju_copy(d->qacc_warmstart, warmstart0 + static_cast<size_t>(r) * static_cast<size_t>(nv), nv);
     } else {
       mju_zero(d->qacc_warmstart, nv);
     }
@@ -141,22 +143,22 @@ void _unsafe_rollout(std::vector<const mjModel*>& m, mjData* d, int start_roll,
       // if any warnings, fill remaining outputs with current outputs, break
       if (nwarning) {
         for (; t < nstep; t++) {
-          int step = r*nstep + t;
+          size_t step = static_cast<size_t>(r) * static_cast<size_t>(nstep) + static_cast<size_t>(t);
           if (state) {
-            mj_getState(m[r], d, state + step*nstate, mjSTATE_FULLPHYSICS);
+            mj_getState(m[r], d, state + step * static_cast<size_t>(nstate), mjSTATE_FULLPHYSICS);
           }
           if (sensordata) {
-            mju_copy(sensordata + step*nsensordata, d->sensordata, nsensordata);
+            mju_copy(sensordata + step * static_cast<size_t>(nsensordata), d->sensordata, nsensordata);
           }
         }
         break;
       }
 
-      int step = r*nstep + t;
+      size_t step = static_cast<size_t>(r) * static_cast<size_t>(nstep) + static_cast<size_t>(t);
 
       // controls
       if (control) {
-        mj_setState(m[r], d, control + step*ncontrol, control_spec);
+        mj_setState(m[r], d, control + step * static_cast<size_t>(ncontrol), control_spec);
       }
 
       // step
@@ -164,12 +166,12 @@ void _unsafe_rollout(std::vector<const mjModel*>& m, mjData* d, int start_roll,
 
       // copy out new state
       if (state) {
-        mj_getState(m[r], d, state + step*nstate, mjSTATE_FULLPHYSICS);
+        mj_getState(m[r], d, state + step * static_cast<size_t>(nstate), mjSTATE_FULLPHYSICS);
       }
 
       // copy out sensor values
       if (sensordata) {
-        mju_copy(sensordata + step*nsensordata, d->sensordata, nsensordata);
+        mju_copy(sensordata + step * static_cast<size_t>(nsensordata), d->sensordata, nsensordata);
       }
     }
   }
@@ -226,7 +228,8 @@ mjtNum* get_array_ptr(std::optional<const py::array_t<mjtNum>> arg,
   py::buffer_info info = arg->request();
 
   // check size
-  int expected_size = nbatch * nstep * dim;
+  size_t expected_size = 
+    static_cast<size_t>(nbatch) * static_cast<size_t>(nstep) * static_cast<size_t>(dim);
   if (info.size != expected_size) {
     std::ostringstream msg;
     msg << name << ".size should be " << expected_size << ", got " << info.size;
