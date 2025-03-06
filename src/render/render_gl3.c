@@ -724,7 +724,9 @@ static void setView(int view, mjrRect viewport, const mjvScene* scn, const mjrCo
     glScalef(1.0f, 1.0f, -0.5f);
   } else {
     // reverse Z rendering mapping without shift [znear, zfar] -> [1, -1] (ndc)
-    glScalef(1.0f, 1.0f, -1.0f);
+    // glScalef(1.0f, 1.0f, -1.0f);
+    glTranslatef(0.0f, 0.0f, 0.5f);
+    glScalef(1.0f, 1.0f, -0.5f);
   }
 
   // set projection, orthographic or perspective
@@ -1181,7 +1183,9 @@ void mjr_render(mjrRect viewport, mjvScene* scn, const mjrContext* con) {
           }
           else {
             // reverse Z rendering mapping without shift [znear, zfar] -> [1, -1] (ndc)
-            glScalef(1.0f, 1.0f, -1.0f);
+            // glScalef(1.0f, 1.0f, -1.0f);
+            glTranslatef(0.0f, 0.0f, 0.5f);
+            glScalef(1.0f, 1.0f, -0.5f);
           }
           if (thislight->directional) {
             glOrtho(-con->shadowClip, con->shadowClip,
