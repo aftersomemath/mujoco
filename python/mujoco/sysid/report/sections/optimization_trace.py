@@ -6,8 +6,8 @@ import numpy as np
 from typing import Any, Dict, Optional
 import plotly.graph_objects as go
 from plotly import subplots as plt_subplots
-from mujoco_sysid.report.sections.base import ReportSection
-from mujoco_sysid.report.utils import plotly_script_tag
+from mujoco.sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.utils import plotly_script_tag
 
 
 

@@ -18,9 +18,9 @@ from enum import Enum
 from typing import Callable, Optional
 
 import mujoco
-from mujoco_sysid.parameter import Parameter, ParameterDict, ModifierFn
+from mujoco.sysid.parameter import Parameter, ParameterDict, ModifierFn
 import numpy as np
-from mujoco_sysid.parameter import ParameterDict
+from mujoco.sysid.parameter import ParameterDict
 
 
 def remove_visuals(in_spec: mujoco.MjSpec) -> mujoco.MjSpec:

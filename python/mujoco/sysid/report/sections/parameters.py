@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Any, Dict
-from mujoco_sysid.report.sections.base import ReportSection
-from mujoco_sysid import parameter
+from mujoco.sysid.report.sections.base import ReportSection
+from mujoco.sysid import parameter
 
 class ParametersTable(ReportSection):
     def __init__(

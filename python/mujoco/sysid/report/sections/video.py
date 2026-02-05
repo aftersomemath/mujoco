@@ -1,13 +1,13 @@
-from mujoco_sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.sections.base import ReportSection
 import numpy as np
 
 
-from mujoco_sysid import parameter
+from mujoco.sysid import parameter
 import mujoco
 import os
-from mujoco_sysid import model_modifier
+from mujoco.sysid import model_modifier
 import pathlib
-from mujoco_sysid.sysid import SystemTrajectory, render_rollout
+from mujoco.sysid.sysid import SystemTrajectory, render_rollout
 from typing import Any, Callable, Dict
 
 def spec_apply(spec, attrs, values):

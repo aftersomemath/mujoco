@@ -19,8 +19,8 @@ from typing import Dict, List, Mapping, Optional, Union
 import mujoco
 import numpy as np
 
-from mujoco_sysid import parameter
-from mujoco_sysid import timeseries
+from mujoco.sysid import parameter
+from mujoco.sysid import timeseries
 
 
 def _get_sensor_indices(model: mujoco.MjModel, sensor_name: str) -> List[int]:

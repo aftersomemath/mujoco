@@ -18,7 +18,7 @@ from typing import Callable
 
 import numpy as np
 
-from mujoco_sysid import parameter
+from mujoco.sysid import parameter
 
 
 def sweep_parameter(

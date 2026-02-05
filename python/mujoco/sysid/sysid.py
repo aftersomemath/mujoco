@@ -31,17 +31,17 @@ import scipy.optimize as scipy_optimize
 from scipy.special import stdtrit
 import tqdm
 
-from mujoco_sysid import parameter
-from mujoco_sysid import plotting
-from mujoco_sysid import model_modifier
-from mujoco_sysid import signal_modifier
-from mujoco_sysid import timeseries
-from mujoco_sysid.report.builder import ReportBuilder
+from mujoco.sysid import parameter
+from mujoco.sysid import plotting
+from mujoco.sysid import model_modifier
+from mujoco.sysid import signal_modifier
+from mujoco.sysid import timeseries
+from mujoco.sysid.report.builder import ReportBuilder
 
-from mujoco_sysid.report.sections.parameters import ParametersTable
-from mujoco_sysid.report.sections.covariance import Covariance
-from mujoco_sysid.report.sections.signals import SignalReport
-from mujoco_sysid.report.sections.optimization_trace import OptimizationTrace
+from mujoco.sysid.report.sections.parameters import ParametersTable
+from mujoco.sysid.report.sections.covariance import Covariance
+from mujoco.sysid.report.sections.signals import SignalReport
+from mujoco.sysid.report.sections.optimization_trace import OptimizationTrace
 
 BuildModelFn: TypeAlias = Callable[
         [parameter.ParameterDict, mujoco.MjSpec], mujoco.MjModel
@@ -1092,11 +1092,11 @@ def default_report(
 
   Users needing a custom report can copy and modify this code.
   """
-  from mujoco_sysid.report.sections.video import VideoPlayer, generate_video_from_trajectory
-  from mujoco_sysid.report.sections.group import GroupSection
-  from mujoco_sysid.report.sections.row import RowSection
-  from mujoco_sysid.report.sections.parameter_distribution import ParameterDistribution
-  from mujoco_sysid.report.sections.insights import AutomatedInsights
+  from mujoco.sysid.report.sections.video import VideoPlayer, generate_video_from_trajectory
+  from mujoco.sysid.report.sections.group import GroupSection
+  from mujoco.sysid.report.sections.row import RowSection
+  from mujoco.sysid.report.sections.parameter_distribution import ParameterDistribution
+  from mujoco.sysid.report.sections.insights import AutomatedInsights
 
   x0 = initial_params.as_vector()
   x_nominal = initial_params.as_nominal_vector()

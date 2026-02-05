@@ -21,7 +21,7 @@ from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mujoco_sysid import parameter
+from mujoco.sysid import parameter
 
 def plot_sensor_comparison(
     model,

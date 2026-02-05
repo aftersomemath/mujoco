@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Set, Iterable
-from mujoco_sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.sections.base import ReportSection
 
 class GroupSection(ReportSection):
     """A report section that groups multiple other sections together."""

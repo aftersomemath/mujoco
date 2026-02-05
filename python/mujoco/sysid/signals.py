@@ -20,7 +20,7 @@ import mujoco
 import numpy as np
 import scipy.signal as sp
 
-from mujoco_sysid import timeseries
+from mujoco.sysid import timeseries
 
 
 def chirp_wave(

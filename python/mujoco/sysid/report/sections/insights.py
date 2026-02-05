@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 import numpy as np
-from mujoco_sysid import parameter
-from mujoco_sysid.report.sections.base import ReportSection
+from mujoco.sysid import parameter
+from mujoco.sysid.report.sections.base import ReportSection
 
 class AutomatedInsights(ReportSection):
     """

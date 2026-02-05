@@ -2,7 +2,7 @@
 import os
 import jinja2
 from typing import Any, List
-from mujoco_sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.sections.base import ReportSection
 
 # Path to the templates directory
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')

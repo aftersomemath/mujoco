@@ -7,9 +7,9 @@ from matplotlib import colors as mpl_colors
 from numpy import typing as npt
 import numpy as np
 
-from mujoco_sysid import parameter
-from mujoco_sysid.report.sections.base import ReportSection
-from mujoco_sysid.report.utils import get_text_color
+from mujoco.sysid import parameter
+from mujoco.sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.utils import get_text_color
 
 
 def _compute_correlation(cov: npt.ArrayLike) -> np.ndarray:

@@ -4,9 +4,9 @@ import plotly.graph_objects as go
 from plotly import subplots as plt_subplots
 import math
 
-from mujoco_sysid import parameter
-from mujoco_sysid.report.sections.base import ReportSection
-from mujoco_sysid.report.utils import plotly_script_tag
+from mujoco.sysid import parameter
+from mujoco.sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.utils import plotly_script_tag
 
 class ParameterDistribution(ReportSection):
     """

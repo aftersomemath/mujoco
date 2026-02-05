@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Set
-from mujoco_sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.sections.base import ReportSection
 
 class RowSection(ReportSection):
     """A report section that displays multiple other sections side-by-side."""

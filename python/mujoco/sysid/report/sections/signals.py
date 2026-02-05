@@ -6,9 +6,9 @@ from plotly import subplots as plt_subplots
 from plotly import colors as plt_colors
 import mujoco
 
-from mujoco_sysid import timeseries
-from mujoco_sysid.report.sections.base import ReportSection
-from mujoco_sysid.report.utils import plotly_script_tag
+from mujoco.sysid import timeseries
+from mujoco.sysid.report.sections.base import ReportSection
+from mujoco.sysid.report.utils import plotly_script_tag
 
 class SignalReport(ReportSection):
     """A report section comparing predicted vs measured observation data."""
