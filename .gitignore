@@ -42,3 +42,15 @@ MUJOCO_LOG.TXT
 wasm/**/dist/
 **/node_modules/
 
+# Development build artifacts (editable install)
+mujoco_install/
+python/mujoco/include/
+python/mujoco/plugin/
+python/mujoco/cmake
+python/mujoco/simulate
+python/mujoco/MuJoCo_*
+python/mujoco/enum_traits.h
+python/mujoco/function_traits.h
+python/mujoco/specs.cc.inc
+.venv
+
