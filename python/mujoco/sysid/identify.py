@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
 
-from mujoco.sysid import model_modifieruv
+from mujoco.sysid import model_modifier
 from mujoco.sysid import parameter
 from mujoco.sysid import signal_modifier
 from mujoco.sysid import sysid
