@@ -1,41 +1,30 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """Plotting utilities."""
 
-import math
-from typing import Optional, Sequence, Tuple
+from __future__ import annotations
 
-from matplotlib.lines import Line2D
+from collections.abc import Sequence
+
 import matplotlib.pyplot as plt
+import mujoco
 import numpy as np
+from matplotlib.lines import Line2D
 
-from mujoco.sysid import parameter
+from mujoco.sysid._src import parameter
+
 
 def plot_sensor_comparison(
-    model,
-    predicted_times=None,
-    predicted_data=None,
-    real_data=None,
-    real_times=None,
-    preid_data=None,
-    preid_times=None,
-    commanded_data=None,
-    commanded_times=None,
-    size_factor=1.0,
-    title_prefix="",
-    sensor_ids=None,
+  model: mujoco.MjModel,
+  predicted_times: np.ndarray | None = None,
+  predicted_data: np.ndarray | None = None,
+  real_data: np.ndarray | None = None,
+  real_times: np.ndarray | None = None,
+  preid_data: np.ndarray | None = None,
+  preid_times: np.ndarray | None = None,
+  commanded_data: np.ndarray | None = None,
+  commanded_times: np.ndarray | None = None,
+  size_factor: float = 1.0,
+  title_prefix: str = "",
+  sensor_ids: list[int] | None = None,
 ):
   """Plots sensor trajectories from simulation and real data.
 
@@ -59,20 +48,6 @@ def plot_sensor_comparison(
   real_color = "#ff7f0e"  # Safety orange
   preid_color = "#2ca02c"  # Forest green
   commanded_color = "#9467bd"  # Purple
-
-  # Alternative multi-dim colors (more harmonious)
-  multi_colors = [
-      "#4878d0",
-      "#ee854a",
-      "#6acc64",
-      "#d65f5f",
-      "#956cb4",
-      "#8c613c",
-      "#dc7ec0",
-      "#797979",
-      "#d5bb67",
-      "#82c6e2",
-  ]
 
   # Determine the reference time array to use
   reference_times = None
@@ -99,24 +74,28 @@ def plot_sensor_comparison(
 
   if sensor_ids is None:
     sensor_ids = list(range(model.nsensor))
-  n_sensors = len(sensor_ids)
+  assert predicted_data is not None
   n_plots = predicted_data.shape[1]
 
   fig, axes = plt.subplots(
-      n_plots,
-      1,
-      figsize=(10 * size_factor, 2.5 * n_plots * size_factor),
-      sharex=True,
+    n_plots,
+    1,
+    figsize=(10 * size_factor, 2.5 * n_plots * size_factor),
+    sharex=True,
   )
   if n_plots == 1:
     axes = [axes]
+  axes = list(axes)  # pyright: ignore[reportArgumentType]
 
   # Set an overall title for the figure.
   fig.suptitle(title_prefix + " Sensors", fontsize=14)  # , y=1.02)
 
   # Loop over each sensor.
   plot_i = 0
-  for i, sensor_id in enumerate(sensor_ids):
+  sensor_dim = 1
+  j = 0
+  dim_str = ""
+  for _i, sensor_id in enumerate(sensor_ids):
     sensor = model.sensor(sensor_id)
     sensor_name = sensor.name
     sensor_dim = int(sensor.dim[0])
@@ -125,120 +104,56 @@ def plot_sensor_comparison(
     for j in range(sensor_dim):
       ax = axes[plot_i]
       plot_i += 1
+      dim_str = "" if sensor_dim == 1 else f" {j}"
       if predicted_data is not None:
+        assert predicted_times is not None
         predicted_signal = predicted_data[:, sensor_addr : sensor_addr + sensor_dim]
-        dim_str = "" if sensor_dim == 1 else f" {j}"
         ax.plot(
-            predicted_times,
-            predicted_signal[:, j],
-            lw=2,
-            color=predicted_color,
-            alpha=0.8,
-            label="Sim" + dim_str,
-        )
-      if real_data is not None:
-        real_signal = real_data[:, sensor_addr : sensor_addr + sensor_dim]
-        ax.plot(
-            real_times,
-            real_signal[:, j],
-            lw=2,
-            color=real_color,
-            linestyle="--",
-            alpha=0.7,
-            label="Real" + dim_str,
-        )
-      if preid_data is not None:
-        preid_signal = preid_data[:, sensor_addr : sensor_addr + sensor_dim]
-        ax.plot(
-            preid_times,
-            preid_signal[:, j],
-            lw=2,
-            color=preid_color,
-            linestyle=":",
-            alpha=0.6,
-            label="Pre-ID" + dim_str,
-        )
-      if commanded_data is not None:
-        commanded_signal = commanded_data[
-            :, sensor_addr : sensor_addr + sensor_dim
-        ]
-        ax.plot(
-            commanded_times,
-            commanded_signal[:, j],
-            lw=2,
-            color=commanded_color,
-            linestyle="-.",
-            alpha=0.6,
-            label="Commanded" + dim_str,
-        )
-      # Place the sensor name in a white box in the top-left corner.
-      ax.text(
-          0.02,
-          0.9,
-          sensor_name + dim_str,
-          transform=ax.transAxes,
-          fontsize=10,
-          weight="bold",
-          verticalalignment="top",
-          horizontalalignment="left",
-          bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
-      )
-
-      # Enable a dashed grid.
-      ax.grid(True, linestyle="--", alpha=0.7)
-
-  # Loop over "extra" sensors from the user
-  start_user_plots_i = plot_i
-  for i in range(plot_i, n_plots):
-    sensor_name = "user_sensor"
-    dim_str = "" if sensor_dim == 1 else f" {j}"
-    ax = axes[plot_i]
-    plot_i += 1
-    if predicted_data is not None:
-      predicted_signal = predicted_data[:, plot_i - 1]
-      ax.plot(
           predicted_times,
-          predicted_signal,
+          predicted_signal[:, j],
           lw=2,
           color=predicted_color,
           alpha=0.8,
-          label="Sim",
-      )
-    if real_data is not None:
-      real_signal = real_data[:, plot_i - 1]
-      ax.plot(
+          label="Sim" + dim_str,
+        )
+      if real_data is not None:
+        assert real_times is not None
+        real_signal = real_data[:, sensor_addr : sensor_addr + sensor_dim]
+        ax.plot(
           real_times,
-          real_signal,
+          real_signal[:, j],
           lw=2,
           color=real_color,
           linestyle="--",
           alpha=0.7,
-          label="Real",
-      )
-    if preid_data is not None:
-      preid_signal = preid_data[:, plot_i - 1]
-      ax.plot(
+          label="Real" + dim_str,
+        )
+      if preid_data is not None:
+        assert preid_times is not None
+        preid_signal = preid_data[:, sensor_addr : sensor_addr + sensor_dim]
+        ax.plot(
           preid_times,
-          preid_signal,
+          preid_signal[:, j],
           lw=2,
           color=preid_color,
           linestyle=":",
           alpha=0.6,
-          label="Pre-ID",
-      )
-    if commanded_data is not None:
-      commanded_signal = commanded_data[:, plot_i - 1]
-      ax.plot(
+          label="Pre-ID" + dim_str,
+        )
+      if commanded_data is not None:
+        assert commanded_times is not None
+        commanded_signal = commanded_data[:, sensor_addr : sensor_addr + sensor_dim]
+        ax.plot(
           commanded_times,
-          commanded_signal,
+          commanded_signal[:, j],
           lw=2,
           color=commanded_color,
           linestyle="-.",
           alpha=0.6,
-          label="Commanded",
-      )
-    # Place the sensor name in a white box in the top-left corner.
-    ax.text(
+          label="Commanded" + dim_str,
+        )
+      # Place the sensor name in a white box in the top-left corner.
+      ax.text(
         0.02,
         0.9,
         sensor_name + dim_str,
@@ -248,6 +163,75 @@ def plot_sensor_comparison(
         verticalalignment="top",
         horizontalalignment="left",
         bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+      )
+
+      # Enable a dashed grid.
+      ax.grid(True, linestyle="--", alpha=0.7)
+
+  # Loop over "extra" sensors from the user
+  for _ in range(plot_i, n_plots):
+    sensor_name = "user_sensor"
+    dim_str = "" if sensor_dim == 1 else f" {j}"
+    ax = axes[plot_i]
+    plot_i += 1
+    if predicted_data is not None:
+      assert predicted_times is not None
+      predicted_signal = predicted_data[:, plot_i - 1]
+      ax.plot(
+        predicted_times,
+        predicted_signal,
+        lw=2,
+        color=predicted_color,
+        alpha=0.8,
+        label="Sim",
+      )
+    if real_data is not None:
+      assert real_times is not None
+      real_signal = real_data[:, plot_i - 1]
+      ax.plot(
+        real_times,
+        real_signal,
+        lw=2,
+        color=real_color,
+        linestyle="--",
+        alpha=0.7,
+        label="Real",
+      )
+    if preid_data is not None:
+      assert preid_times is not None
+      preid_signal = preid_data[:, plot_i - 1]
+      ax.plot(
+        preid_times,
+        preid_signal,
+        lw=2,
+        color=preid_color,
+        linestyle=":",
+        alpha=0.6,
+        label="Pre-ID",
+      )
+    if commanded_data is not None:
+      assert commanded_times is not None
+      commanded_signal = commanded_data[:, plot_i - 1]
+      ax.plot(
+        commanded_times,
+        commanded_signal,
+        lw=2,
+        color=commanded_color,
+        linestyle="-.",
+        alpha=0.6,
+        label="Commanded",
+      )
+    # Place the sensor name in a white box in the top-left corner.
+    ax.text(
+      0.02,
+      0.9,
+      sensor_name + dim_str,
+      transform=ax.transAxes,
+      fontsize=10,
+      weight="bold",
+      verticalalignment="top",
+      horizontalalignment="left",
+      bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
     )
 
     # Enable a dashed grid.
@@ -257,47 +241,47 @@ def plot_sensor_comparison(
   legend_handles = []
   if predicted_data is not None:
     legend_handles.append(
-        Line2D([0], [0], color=predicted_color, lw=2, label="Simulation")
+      Line2D([0], [0], color=predicted_color, lw=2, label="Simulation")
     )
   if real_data is not None:
     legend_handles.append(
-        Line2D([0], [0], color=real_color, lw=2, linestyle="--", label="Real")
+      Line2D([0], [0], color=real_color, lw=2, linestyle="--", label="Real")
     )
   if preid_data is not None:
     legend_handles.append(
-        Line2D([0], [0], color=preid_color, lw=2, linestyle=":", label="Pre-ID")
+      Line2D([0], [0], color=preid_color, lw=2, linestyle=":", label="Pre-ID")
     )
   if commanded_data is not None:
     legend_handles.append(
-        Line2D(
-            [0],
-            [0],
-            color=commanded_color,
-            lw=2,
-            linestyle="-.",
-            label="Commanded",
-        )
+      Line2D(
+        [0],
+        [0],
+        color=commanded_color,
+        lw=2,
+        linestyle="-.",
+        label="Commanded",
+      )
     )
 
   if legend_handles:
     fig.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0.935),
-        ncol=len(legend_handles),
-        fancybox=True,
-        shadow=True,
-        fontsize=10,
-        title="Data Source",
+      handles=legend_handles,
+      loc="upper center",
+      bbox_to_anchor=(0.5, 0.935),
+      ncol=len(legend_handles),
+      fancybox=True,
+      shadow=True,
+      fontsize=10,
+      title="Data Source",
     )
 
   fig.supxlabel("Time (s)", fontsize=8)
-  plt.tight_layout(rect=[0, 0.03, 1, 0.9])
+  plt.tight_layout(rect=(0, 0.03, 1, 0.9))
 
 
 def plot_objective(
-    objective: Sequence[float],
-    figsize: Tuple[int, int] = (8, 5),
+  objective: Sequence[float],
+  figsize: tuple[float, float] = (8, 5),
 ):
   plt.figure(figsize=figsize)
   plt.plot(objective, linewidth=2, marker="o", markersize=4)
@@ -316,18 +300,21 @@ def plot_objective(
 
 
 def plot_candidate(
-    candidate: Sequence[np.ndarray],
-    bounds: Optional[Tuple[Sequence[float], Sequence[float]]] = None,
-    param_names: Optional[Sequence[str]] = None,
-    figsize: Tuple[int, int] = (12, 2.5),
-    dims_per_page: int = 6,
-    log_diff: bool = True,
-    bound_eps: float = 1e-3,
+  candidate: Sequence[np.ndarray],
+  bounds: tuple[Sequence[float] | np.ndarray, Sequence[float] | np.ndarray]
+  | None = None,
+  param_names: Sequence[str] | None = None,
+  figsize: tuple[float, float] = (12, 2.5),
+  dims_per_page: int = 6,
+  log_diff: bool = True,
+  bound_eps: float = 1e-3,
 ):
   values = np.array(candidate)  # shape: (n_iter, n_dim)
   n_iter, n_dim = values.shape
   diffs = np.diff(values, axis=0)
 
+  mins = np.full(n_dim, -np.inf)
+  maxs = np.full(n_dim, np.inf)
   if bounds is not None:
     mins = np.array(bounds[0])
     maxs = np.array(bounds[1])
@@ -339,7 +326,7 @@ def plot_candidate(
   # TODO support pages, they are currently broken because saving to disk overwrites the the pages
   # n_pages = math.ceil(n_dim / dims_per_page)
   n_pages = 1
-  for page in range(n_pages):
+  for _page in range(n_pages):
     # start = page * dims_per_page
     # end = min((page + 1) * dims_per_page, n_dim)
     start = 0
@@ -347,10 +334,10 @@ def plot_candidate(
     dims_in_page = end - start
 
     fig, axes = plt.subplots(
-        dims_in_page,
-        2,
-        figsize=(figsize[0], figsize[1] * dims_in_page),
-        sharex="col",
+      dims_in_page,
+      2,
+      figsize=(figsize[0], figsize[1] * dims_in_page),
+      sharex="col",
     )
     if dims_in_page == 1:
       axes = np.expand_dims(axes, 0)
@@ -368,20 +355,20 @@ def plot_candidate(
         lower, upper = mins[dim], maxs[dim]
         ax_val.axhspan(lower, upper, color="gray", alpha=0.08)
         ax_val.plot(
-            [0, n_iter - 1],
-            [lower, lower],
-            color="gray",
-            linestyle="--",
-            alpha=0.3,
-            linewidth=1,
+          [0, n_iter - 1],
+          [lower, lower],
+          color="gray",
+          linestyle="--",
+          alpha=0.3,
+          linewidth=1,
         )
         ax_val.plot(
-            [0, n_iter - 1],
-            [upper, upper],
-            color="gray",
-            linestyle="--",
-            alpha=0.3,
-            linewidth=1,
+          [0, n_iter - 1],
+          [upper, upper],
+          color="gray",
+          linestyle="--",
+          alpha=0.3,
+          linewidth=1,
         )
         near_lower = np.abs(vals - lower) < bound_eps
         near_upper = np.abs(vals - upper) < bound_eps
@@ -390,72 +377,69 @@ def plot_candidate(
           is_near_prev = near_bound[t - 1]
           is_near_curr = near_bound[t]
           color = "#d62728" if is_near_prev and is_near_curr else "#1f77b4"
-          ax_val.plot(
-              [t - 1, t], [vals[t - 1], vals[t]], color=color, linewidth=2
-          )
+          ax_val.plot([t - 1, t], [vals[t - 1], vals[t]], color=color, linewidth=2)
           ax_val.plot(t, vals[t], marker="o", markersize=3, color=color)
+        # Overlay triangle markers for near-bound points
+        for t in range(n_iter):
+          if near_lower[t]:
+            ax_val.plot(t, vals[t], marker="v", markersize=6, color="#d62728")
+          elif near_upper[t]:
+            ax_val.plot(t, vals[t], marker="^", markersize=6, color="#d62728")
       else:
         ax_val.plot(vals, linewidth=2, marker="o", markersize=3)
-
-      # Overlay triangle markers for near-bound points
-      for t in range(n_iter):
-        if near_lower[t]:
-          ax_val.plot(t, vals[t], marker="v", markersize=6, color="#d62728")
-        elif near_upper[t]:
-          ax_val.plot(t, vals[t], marker="^", markersize=6, color="#d62728")
 
       # Annotate final value
       final_val = vals[-1]
       final_str = (
-          f"{final_val:.2e}"
-          if abs(final_val) < 1e-3 or abs(final_val) > 1e3
-          else f"{final_val:.4f}"
+        f"{final_val:.2e}"
+        if abs(final_val) < 1e-3 or abs(final_val) > 1e3
+        else f"{final_val:.4f}"
       )
       ax_val.text(
-          n_iter - 1,
-          final_val,
-          final_str,
-          ha="right",
-          va="bottom",
-          fontsize=9,
-          color="blue",
+        n_iter - 1,
+        final_val,
+        final_str,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+        color="blue",
       )
 
       # Annotate final value.
       final_val = values[-1, dim]
       final_str = (
-          f"{final_val:.2e}"
-          if abs(final_val) < 1e-3 or abs(final_val) > 1e3
-          else f"{final_val:.4f}"
+        f"{final_val:.2e}"
+        if abs(final_val) < 1e-3 or abs(final_val) > 1e3
+        else f"{final_val:.4f}"
       )
       ax_val.text(
-          n_iter - 1,
-          final_val,
-          final_str,
-          ha="right",
-          va="bottom",
-          fontsize=9,
-          color="blue",
+        n_iter - 1,
+        final_val,
+        final_str,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+        color="blue",
       )
 
       # Plot diffs
       if log_diff:
         eps = 1e-12
         ax_diff.plot(
-            np.log10(np.abs(diffs[:, dim]) + eps),
-            linewidth=2,
-            marker="x",
-            markersize=4,
-            color="tab:orange",
+          np.log10(np.abs(diffs[:, dim]) + eps),
+          linewidth=2,
+          marker="x",
+          markersize=4,
+          color="tab:orange",
         )
         ax_diff.set_ylabel("log Δ", fontsize=9)
       else:
         ax_diff.plot(
-            diffs[:, dim],
-            linewidth=2,
-            marker="x",
-            markersize=4,
-            color="tab:orange",
+          diffs[:, dim],
+          linewidth=2,
+          marker="x",
+          markersize=4,
+          color="tab:orange",
         )
 
       ax_diff.grid(True, linestyle="--", alpha=0.6)
@@ -467,21 +451,20 @@ def plot_candidate(
     axes[0, 0].set_title("Candidate Value", fontsize=12)
     axes[0, 1].set_title("Δ Candidate (Diff)", fontsize=12)
 
-    fig.suptitle(
-        f"Candidate Values and Changes (Dims {start}-{end-1})", fontsize=14
-    )
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.suptitle(f"Candidate Values and Changes (Dims {start}-{end - 1})", fontsize=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
 
 
 def plot_candidate_heatmap(
-    candidate: Sequence[np.ndarray],
-    param_names: Optional[Sequence[str]] = None,
-    bounds: Optional[Tuple[Sequence[float], Sequence[float]]] = None,
-    normalize: bool = True,
-    figsize: Tuple[int, int] = (10, 6),
-    cmap: str = "RdBu",
-    show_colorbar: bool = True,
-    bound_eps: float = 1e-3,
+  candidate: Sequence[np.ndarray],
+  param_names: Sequence[str] | None = None,
+  bounds: tuple[Sequence[float] | np.ndarray, Sequence[float] | np.ndarray]
+  | None = None,
+  normalize: bool = True,
+  figsize: tuple[float, float] = (10, 6),
+  cmap: str = "RdBu",
+  show_colorbar: bool = True,
+  bound_eps: float = 1e-3,
 ):
   data = np.array(candidate).T  # shape: (n_dim, n_iter)
   n_dim = data.shape[0]
@@ -533,11 +516,11 @@ def plot_candidate_heatmap(
 
 
 def parameter_confidence(
-    all_exp_names: Sequence[str],
-    all_params: Sequence[parameter.ParameterDict],
-    all_intervals: Sequence[np.ndarray],
-    cols: int = 5,
-    gt_params: parameter.ParameterDict | None = None,
+  all_exp_names: Sequence[str],
+  all_params: Sequence[parameter.ParameterDict],
+  all_intervals: Sequence[np.ndarray],
+  cols: int = 5,
+  gt_params: parameter.ParameterDict | None = None,
 ):
   named_estimates = {}
   # Create an entry for every non-frozen parameter
@@ -546,15 +529,15 @@ def parameter_confidence(
     for name in param_names:
       if name not in named_estimates:
         named_estimates[name] = {
-            "x": [],
-            "intervals": [],
-            "min_bounds": [],
-            "max_bounds": [],
-            "plot_labels": [],
+          "x": [],
+          "intervals": [],
+          "min_bounds": [],
+          "max_bounds": [],
+          "plot_labels": [],
         }
 
   for exp_name, params, intervals in zip(
-      all_exp_names, all_params, all_intervals
+    all_exp_names, all_params, all_intervals, strict=True
   ):
     param_names = params.get_non_frozen_parameter_names()
     xs = params.as_vector()
@@ -568,11 +551,13 @@ def parameter_confidence(
           assert name[-1] == "]"
           left_bracket_i = name[::-1].find("[")
           index = int(name[-left_bracket_i:-1])
-          named_estimates[name]["xgt"] = gt_params[
-              name[: -left_bracket_i - 1]
-          ].value[index]
+          named_estimates[name]["xgt"] = gt_params[name[: -left_bracket_i - 1]].value[
+            index
+          ]
 
-    for i, (name, x, interval) in enumerate(zip(param_names, xs, intervals)):
+    for i, (name, x, interval) in enumerate(
+      zip(param_names, xs, intervals, strict=True)
+    ):
       named_estimates[name]["x"].append(x)
       named_estimates[name]["intervals"].append(interval)
       named_estimates[name]["min_bounds"].append(bounds[0][i])
@@ -581,7 +566,7 @@ def parameter_confidence(
 
   rows = len(named_estimates) // cols + 1
   fig, axs = plt.subplots(
-      rows, cols, figsize=(20, 2 * (len(named_estimates) // cols + 1))
+    rows, cols, figsize=(20, 2 * (len(named_estimates) // cols + 1))
   )
   if rows == 1:
     axs = [axs]
@@ -598,11 +583,9 @@ def parameter_confidence(
     max_bound = np.min(named_estimates[name]["max_bounds"])
 
     for j, (x, interval, plot_label) in enumerate(
-        zip(x_list, intervals, plot_labels)
+      zip(x_list, intervals, plot_labels, strict=True)
     ):
-      if not np.isfinite(interval) or 2.0 * interval > 2.0 * (
-          max_bound - min_bound
-      ):
+      if not np.isfinite(interval) or 2.0 * interval > 2.0 * (max_bound - min_bound):
         interval = 2.0 * (max_bound - min_bound)
         eb = axs[row][col].errorbar(x, -j, xerr=interval)
         eb[-1][0].set_linestyle("--")
@@ -614,10 +597,96 @@ def parameter_confidence(
     axs[row][col].yaxis.set_ticklabels([])
     axs[row][col].set_title(name)
     axs[row][col].grid(True)
-    axs[row][col].legend(
-        fontsize=5, loc="upper right", bbox_to_anchor=(1.4, 1.0)
-    )
+    axs[row][col].legend(fontsize=5, loc="upper right", bbox_to_anchor=(1.4, 1.0))
     if gt_params is not None:
       axs[row][col].axvline(named_estimates[name]["xgt"], color="b", ls="--")
 
   fig.tight_layout()
+
+
+def render_rollout(
+  model: mujoco.MjModel | Sequence[mujoco.MjModel],
+  data: mujoco.MjData,
+  state: np.ndarray,
+  framerate: int,
+  camera: str | int = -1,
+  width: int = 640,
+  height: int = 480,
+  light_pos: Sequence[float] | None = None,
+) -> list[np.ndarray]:
+  """Renders a rollout or batch of rollouts.
+
+  Args:
+    model: Single model or list of models (one per batch).
+    data: MjData scratch object.
+    state: State array of shape (nbatch, nsteps, nstate).
+    framerate: Frames per second to render.
+    camera: Camera name or ID.
+    width: Image width.
+    height: Image height.
+    light_pos: Optional light position [x, y, z] to add a spotlight.
+
+  Returns:
+    List of rendered frames (numpy arrays).
+  """
+  nbatch = state.shape[0]
+
+  if isinstance(model, mujoco.MjModel):
+    models_list = [model] * nbatch
+  else:
+    models_list = list(model)
+    if len(models_list) == 1:
+      models_list = models_list * nbatch
+    else:
+      assert len(models_list) == nbatch
+
+  # Visual options
+  vopt = mujoco.MjvOption()
+  vopt.geomgroup[3] = 1  # Show visualization geoms
+
+  pert = mujoco.MjvPerturb()
+  catmask = mujoco.mjtCatBit.mjCAT_DYNAMIC
+
+  # Simulate and render.
+  frames = []
+
+  with mujoco.Renderer(models_list[0], height=height, width=width) as renderer:
+    for i in range(state.shape[1]):
+      # Check if we should capture this frame based on framerate
+      if len(frames) < i * models_list[0].opt.timestep * framerate:
+        for j in range(state.shape[0]):
+          # Set state
+          mujoco.mj_setState(
+            models_list[j], data, state[j, i, :], mujoco.mjtState.mjSTATE_FULLPHYSICS
+          )
+          mujoco.mj_forward(models_list[j], data)
+
+          # Use first model to make the scene, add subsequent models
+          if j == 0:
+            renderer.update_scene(data, camera, scene_option=vopt)
+          else:
+            mujoco.mjv_addGeoms(
+              models_list[j], data, vopt, pert, catmask, renderer.scene
+            )
+
+        # Add light, if requested
+        if light_pos is not None:
+          if renderer.scene.nlight < 100:  # check limit
+            light = renderer.scene.lights[renderer.scene.nlight]
+            light.ambient = [0, 0, 0]
+            light.attenuation = [1, 0, 0]
+            light.castshadow = 1
+            light.cutoff = 45
+            light.diffuse = [0.8, 0.8, 0.8]
+            light.dir = [0, 0, -1]
+            light.type = mujoco.mjtLightType.mjLIGHT_SPOT
+            light.exponent = 10
+            light.headlight = 0
+            light.specular = [0.3, 0.3, 0.3]
+            light.pos = light_pos
+            renderer.scene.nlight += 1
+
+        # Render and add the frame.
+        pixels = renderer.render()
+        frames.append(pixels)
+  return frames

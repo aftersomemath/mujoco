@@ -1,32 +1,17 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """Common signal modifiers."""
 
-from typing import Dict, List, Mapping, Optional, Union
+from __future__ import annotations
+
+from collections.abc import Mapping
 
 import mujoco
 import numpy as np
 
-from mujoco.sysid import parameter
-from mujoco.sysid import timeseries
+from mujoco.sysid._src import parameter, timeseries
 
 
-def _get_sensor_indices(model: mujoco.MjModel, sensor_name: str) -> List[int]:
-  sensor_id = mujoco.mj_name2id(
-      model, mujoco.mjtObj.mjOBJ_SENSOR.value, sensor_name
-  )
+def _get_sensor_indices(model: mujoco.MjModel, sensor_name: str) -> list[int]:
+  sensor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR.value, sensor_name)
   if sensor_id == -1:
     raise ValueError(f"Sensor not found in model: {sensor_name}")
 
@@ -37,15 +22,15 @@ def _get_sensor_indices(model: mujoco.MjModel, sensor_name: str) -> List[int]:
 
 
 def get_sensor_indices(
-    model: mujoco.MjModel,
-    sensor_name: Union[str, List[str]],
-    sort: bool = False,
-) -> List[int]:
+  model: mujoco.MjModel,
+  sensor_name: str | list[str],
+  sort: bool = False,
+) -> list[int]:
   """Get sensor indices from a sensor configuration dictionary.
 
   Args:
-      model: MuJoCo model containing the sensors.
-      sensor_name: sensor name or list of names to return the indices for
+    model: MuJoCo model containing the sensors.
+    sensor_name: sensor name or list of names to return the indices for
   """
   if isinstance(sensor_name, str):
     return _get_sensor_indices(model, sensor_name)
@@ -58,10 +43,9 @@ def get_sensor_indices(
 
 
 def apply_bias(
-    ts: timeseries.TimeSeries,
-    model: mujoco.MjModel,
-    sensor_name: str,
-    bias: parameter.Parameter,
+  ts: timeseries.TimeSeries,
+  sensor_name: str,
+  bias: parameter.Parameter,
 ) -> timeseries.TimeSeries:
   indices = ts.get_indices(sensor_name)[1]
   data_out = ts.data.copy()
@@ -70,10 +54,9 @@ def apply_bias(
 
 
 def apply_gain(
-    ts: timeseries.TimeSeries,
-    model: mujoco.MjModel,
-    sensor_name: str,
-    gain: parameter.Parameter,
+  ts: timeseries.TimeSeries,
+  sensor_name: str,
+  gain: parameter.Parameter,
 ) -> timeseries.TimeSeries:
   indices = ts.get_indices(sensor_name)[1]
   data_out = ts.data.copy()
@@ -82,14 +65,13 @@ def apply_gain(
 
 
 def apply_delay(
-    ts: timeseries.TimeSeries,
-    model: mujoco.MjModel,
-    sensor_name: str,
-    delay: parameter.Parameter,
+  ts: timeseries.TimeSeries,
+  sensor_name: str,
+  delay: parameter.Parameter,
 ) -> timeseries.TimeSeries:
   indices = ts.get_indices(sensor_name)[1]
 
-  ts_sensor = timeseries.TimeSeries(ts.times, ts.data[:, indices],ts.signal_mapping)
+  ts_sensor = timeseries.TimeSeries(ts.times, ts.data[:, indices], ts.signal_mapping)
   ts_sensor_delayed = ts_sensor.resample(ts.times - delay.value)
 
   ts_delayed = timeseries.TimeSeries(ts.times, ts.data, ts.signal_mapping)
@@ -99,24 +81,24 @@ def apply_delay(
 
 
 def apply_time_window(
-    ts: timeseries.TimeSeries,
-    min_t: float,
-    max_t: float,
+  ts: timeseries.TimeSeries,
+  min_t: float,
+  max_t: float,
 ) -> timeseries.TimeSeries:
   """Select a subset of a timeseries whose timestamps plus the max delay can be
   sampled from ts_sample."""
   min_i = np.searchsorted(ts.times, min_t, side="left")
   max_i = np.searchsorted(ts.times, max_t, side="right")
   return timeseries.TimeSeries(
-      ts.times[min_i:max_i], ts.data[min_i:max_i], ts.signal_mapping
+    ts.times[min_i:max_i], ts.data[min_i:max_i], ts.signal_mapping
   )
 
 
 def apply_delayed_ts_window(
-    ts: timeseries.TimeSeries,
-    ts_delayed: timeseries.TimeSeries,
-    min_delay: float,
-    max_delay: float,
+  ts: timeseries.TimeSeries,
+  ts_delayed: timeseries.TimeSeries,
+  min_delay: float,
+  max_delay: float,
 ) -> timeseries.TimeSeries:
   """Window a timeseries so that the included timestamps lay within the bounds of a
   timeseries that may be delayed between min_delay and max_delay.
@@ -132,66 +114,105 @@ def apply_delayed_ts_window(
   """
   if min_delay > max_delay:
     raise ValueError(
-        "min_delay must be less than or equal to max_delay, "
-        f"received {min_delay} and {max_delay}"
+      "min_delay must be less than or equal to max_delay, "
+      f"received {min_delay} and {max_delay}"
     )
   return apply_time_window(
-      ts, ts_delayed.times[0] - min_delay, ts_delayed.times[-1] - max_delay  )
+    ts, ts_delayed.times[0] - min_delay, ts_delayed.times[-1] - max_delay
+  )
 
 
-def apply_resample_and_delay(
-    ts: timeseries.TimeSeries,
-    times: np.ndarray,
-    default_delay: float,
-    model: mujoco.MjModel,
-    sensor_delays: Optional[Dict[str, float]] = None,
-    predicted_data: bool = True,
-) -> timeseries.TimeSeries:
-  delays = [default_delay]*ts.data.shape[1]
-  for name, delay in sensor_delays:
+def _build_per_column_delays(
+  ts: timeseries.TimeSeries,
+  default_delay: float,
+  sensor_delays: dict[str, float] | None,
+  predicted_data: bool,
+) -> list[float]:
+  """Build a per-column delay list, shared by both implementations."""
+  delays = [default_delay] * ts.data.shape[1]
+  if sensor_delays is None:
+    sensor_delays = {}
+  for name, delay in sensor_delays.items():
     sensor_indices = ts.get_indices(name)[1]
     for i in sensor_indices:
       delays[i] = delay
+  if predicted_data:
+    delays = [-d for d in delays]
+  return delays
 
-  # TODO does resampling each signal individually, in order to support
-  # non-contiguous indices, have a significant performance hit?
+
+def _apply_resample_and_delay_columnwise(
+  ts: timeseries.TimeSeries,
+  times: np.ndarray,
+  delays: list[float],
+) -> np.ndarray:
+  """Reference implementation: resample each column independently."""
   resampled_ts = []
   for i, d in enumerate(delays):
-    if predicted_data: # TODO why is this needed?
-      d = -d
-    ts_sliced = timeseries.TimeSeries(ts.times, ts.data[:, i:i+1], ts.signal_mapping)
+    ts_sliced = timeseries.TimeSeries(
+      ts.times, ts.data[:, i : i + 1], ts.signal_mapping
+    )
     ts_sliced_resampled = ts_sliced.resample(times + d)
     resampled_ts.append(ts_sliced_resampled)
+  return np.concatenate([t.data for t in resampled_ts], axis=1)
 
-  data_stacked = np.concatenate([ts.data for ts in resampled_ts], axis=1)
-  return timeseries.TimeSeries(times, data_stacked, ts.signal_mapping)
+
+_VERIFY_RESAMPLE_GROUPING = False
+
+
+def apply_resample_and_delay(
+  ts: timeseries.TimeSeries,
+  times: np.ndarray,
+  default_delay: float,
+  sensor_delays: dict[str, float] | None = None,
+  predicted_data: bool = True,
+) -> timeseries.TimeSeries:
+  delays = _build_per_column_delays(ts, default_delay, sensor_delays, predicted_data)
+
+  # Group columns by delay value to minimize interpolation calls.
+  delay_to_cols: dict[float, list[int]] = {}
+  for i, d in enumerate(delays):
+    delay_to_cols.setdefault(d, []).append(i)
+
+  data_out = np.empty((len(times), ts.data.shape[1]))
+  for d, cols in delay_to_cols.items():
+    group_data = ts.data[:, cols]
+    group_ts = timeseries.TimeSeries(ts.times, group_data, ts.signal_mapping)
+    resampled = group_ts.resample(times + d)
+    data_out[:, cols] = resampled.data
+
+  if _VERIFY_RESAMPLE_GROUPING:
+    reference = _apply_resample_and_delay_columnwise(ts, times, delays)
+    np.testing.assert_array_equal(data_out, reference)
+
+  return timeseries.TimeSeries(times, data_out, ts.signal_mapping)
 
 
 def prepare_sensor_weights(
-    sensor_weights: Mapping[str, float] | np.ndarray,
-    n_sensors: int,
-    model: mujoco.MjModel,
+  sensor_weights: Mapping[str, float] | np.ndarray,
+  n_sensors: int,
+  model: mujoco.MjModel,
 ) -> np.ndarray:
   if isinstance(sensor_weights, np.ndarray):
     if sensor_weights.ndim != 1 or sensor_weights.shape[0] != n_sensors:
       raise ValueError(
-          "Expected sensor_weights to be a numpy array of shape (n_sensors,), "
-          f"received {sensor_weights.shape}"
+        "Expected sensor_weights to be a numpy array of shape (n_sensors,), "
+        f"received {sensor_weights.shape}"
       )
     return sensor_weights
   else:
     weights = np.ones(n_sensors)
     ids = get_sensor_indices(model, list(sensor_weights.keys()))
-    for i, w in zip(ids, sensor_weights.values()):
+    for i, w in zip(ids, sensor_weights.values(), strict=True):
       weights[i] = w
     return weights
 
 
 def weighted_diff(
-    predicted_data: np.ndarray,
-    measured_data: np.ndarray,
-    model: mujoco.MjModel | None = None,
-    sensor_weights: Mapping[str, float] | np.ndarray | None = None,
+  predicted_data: np.ndarray,
+  measured_data: np.ndarray,
+  model: mujoco.MjModel | None = None,
+  sensor_weights: Mapping[str, float] | np.ndarray | None = None,
 ) -> np.ndarray:
   """Compute the difference `measured_data - predicted_data`, optionally scaled by
   sensor weights.
@@ -216,8 +237,8 @@ def weighted_diff(
 
 
 def normalize_residual(
-    residual: np.ndarray,
-    measured_data: np.ndarray,
+  residual: np.ndarray,
+  measured_data: np.ndarray,
 ) -> np.ndarray:
   """Normalize the residual by the standard deviation of the measured data."""
   return residual / (np.linalg.norm(measured_data, axis=0) / np.sqrt(2))

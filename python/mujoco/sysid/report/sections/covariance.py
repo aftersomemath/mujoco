@@ -1,32 +1,31 @@
-import numpy as np
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import matplotlib
+import numpy as np
 from matplotlib import cm
 from matplotlib import colors as mpl_colors
 from numpy import typing as npt
-import numpy as np
 
-from mujoco.sysid import parameter
+from mujoco.sysid._src import parameter
 from mujoco.sysid.report.sections.base import ReportSection
 from mujoco.sysid.report.utils import get_text_color
 
 
 def _compute_correlation(cov: npt.ArrayLike) -> np.ndarray:
-    """
-    Calculates the correlation matrix from a covariance matrix.
-    Formula: A[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
-    """
-    cov = np.array(cov)
-    sqrt_diag_cov = np.sqrt(np.diag(cov))
+  """
+  Calculates the correlation matrix from a covariance matrix.
+  Formula: A[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
+  """
+  cov = np.array(cov)
+  sqrt_diag_cov = np.sqrt(np.diag(cov))
 
-    # denom[i, j] = sqrt_diag_cov[i] * sqrt_diag_cov[j]
-    denom = np.outer(sqrt_diag_cov, sqrt_diag_cov)
+  # denom[i, j] = sqrt_diag_cov[i] * sqrt_diag_cov[j]
+  denom = np.outer(sqrt_diag_cov, sqrt_diag_cov)
 
-    # Safe division (handles division by zero by returning 0)
-    return np.divide(
-        cov, denom, out=np.zeros_like(cov, dtype=float), where=denom != 0
-    )
+  # Safe division (handles division by zero by returning 0)
+  return np.divide(cov, denom, out=np.zeros_like(cov, dtype=float), where=denom != 0)
+
 
 class Covariance(ReportSection):
   """Displays values of the covariance and correlation matrices.
@@ -35,12 +34,12 @@ class Covariance(ReportSection):
   """
 
   def __init__(
-      self,
-      title: str,
-      covariance: npt.ArrayLike,
-      parameter_dict: parameter.ParameterDict,
-      anchor: str = "",
-      collapsible: bool = True,
+    self,
+    title: str,
+    covariance: npt.ArrayLike,
+    parameter_dict: parameter.ParameterDict,
+    anchor: str = "",
+    collapsible: bool = True,
   ):
     super().__init__(collapsible=collapsible)
     self._title = title
@@ -72,25 +71,27 @@ class Covariance(ReportSection):
           dim_names.append(f"{param_name}[{i}]")
 
     context = {
-        "title": self._title,
-        "covariance_data": self._covariance_table_data(),
-        "correlation_data": self._correlation_table_data(),
-        "dim_names": dim_names,
+      "title": self._title,
+      "covariance_data": self._covariance_table_data(),
+      "correlation_data": self._correlation_table_data(),
+      "dim_names": dim_names,
     }
     if self._covariance.size == 0:
-      context["message"] = "Covariance matrix is empty. This usually means there are no parameters to optimize or all parameters are frozen."
+      context["message"] = (
+        "Covariance matrix is empty. This usually means there are no parameters to optimize or all parameters are frozen."
+      )
     return context
 
   def header_includes(self) -> set[str]:
     return {""}
 
   def _create_table_data(
-      self,
-      matrix: np.ndarray,
-      norm: mpl_colors.Normalize,
-      cmap: mpl_colors.Colormap,
-      # Function to get the value used for coloring based on (row, col, value)
-      get_color_input_value: Callable[[int, int, float], float],
+    self,
+    matrix: np.ndarray,
+    norm: mpl_colors.Normalize,
+    cmap: mpl_colors.Colormap,
+    # Function to get the value used for coloring based on (row, col, value)
+    get_color_input_value: Callable[[int, int, float], float],
   ) -> list[list[dict[str, Any]]]:
     """Helper method to generate formatted table data with colors."""
     scalar_map = cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -102,15 +103,17 @@ class Covariance(ReportSection):
         color_value = get_color_input_value(i, j, value)
 
         # Get RGBA color, convert to HEX.
-        rgba_color = scalar_map.to_rgba(color_value)
-        hex_color = mpl_colors.rgb2hex(rgba_color)
+        rgba_color = scalar_map.to_rgba(color_value)  # pyright: ignore[reportArgumentType]  # type: ignore[arg-type]
+        hex_color = mpl_colors.rgb2hex(rgba_color)  # pyright: ignore[reportArgumentType]  # type: ignore[arg-type]
         # Make sure the text is visible over the cell color.
         text_color = get_text_color(hex_color)
-        row_data.append({
+        row_data.append(
+          {
             "value": value,
             "bgcolor": hex_color,
             "textcolor": text_color,
-        })
+          }
+        )
       table_data.append(row_data)
     return table_data
 
@@ -119,7 +122,7 @@ class Covariance(ReportSection):
     cmap = matplotlib.colormaps["bwr"]
 
     if self._covariance.size == 0:
-      max_abs_val = 1.0 # Default value to avoid errors
+      max_abs_val = 1.0  # Default value to avoid errors
     else:
       max_abs_val = np.max(np.abs(self._covariance))
 
@@ -129,11 +132,10 @@ class Covariance(ReportSection):
     norm = mpl_colors.Normalize(vmin=-max_abs_val, vmax=max_abs_val)
 
     # Color based on the actual value
-    get_color_input = lambda i, j, val: np.abs(val)
+    def get_color_input(i, j, val):
+      return np.abs(val)
 
-    return self._create_table_data(
-        self._covariance, norm, cmap, get_color_input
-    )
+    return self._create_table_data(self._covariance, norm, cmap, get_color_input)
 
   def _correlation_table_data(self):
     correlation = _compute_correlation(self._covariance)
@@ -148,5 +150,3 @@ class Covariance(ReportSection):
       return np.abs(val)
 
     return self._create_table_data(correlation, norm, cmap, get_color_input)
-
-

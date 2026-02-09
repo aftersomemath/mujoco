@@ -1,48 +1,59 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """Parameter utilities."""
 
+from __future__ import annotations
+
+import copy
 import pathlib
-from typing import Dict, Optional, Union, Callable, TypeAlias
-from typing_extensions import Self # Mujoco supports Python 3.9+ but Self is 3.11+
+from typing import TYPE_CHECKING, Callable, TypeAlias
 
 import colorama
+import mujoco
 import numpy as np
 import numpy.typing as npt
-from tabulate import tabulate
 import yaml
-import copy
+from tabulate import tabulate
 
-import mujoco
+if TYPE_CHECKING:
+  from typing_extensions import Self
+
+  from mujoco.sysid._src.model_modifier import InertiaType
 
 Fore = colorama.Fore
 Style = colorama.Style
 
-ModifierFn: TypeAlias = Callable[[Self, mujoco.MjSpec], None]
+ModifierFn: TypeAlias = Callable[[mujoco.MjSpec, "Parameter"], object]
+
 
 class Parameter:
-  """A parameter or group of parameters for system identification."""
+  """A single (possibly multi-dimensional) parameter for system identification.
+
+  A Parameter holds a current ``value``, a ``nominal`` baseline, and box
+  bounds (``min_value``, ``max_value``).  An optional ``modifier`` callback
+  is invoked during model compilation to apply the parameter to an MjSpec.
+
+  Args:
+    name: Human-readable identifier (must be unique within a ParameterDict).
+    nominal: Nominal (initial) value; scalar or array-like.
+    min_value: Lower bound, same shape as *nominal*.
+    max_value: Upper bound, same shape as *nominal*.
+    frozen: If True the parameter is excluded from optimization.
+    modifier: Optional callback ``(MjSpec, Parameter) -> None`` that writes
+      the parameter into a spec during model compilation.
+  """
+
+  # Type hints for dynamically-added attributes (set by parameter builders).
+  if TYPE_CHECKING:
+    inertia_type: InertiaType | None
+    scale_rot_inertia: bool
 
   def __init__(
-      self,
-      name: str,
-      nominal: Union[float, npt.ArrayLike],
-      min_value: Union[float, npt.ArrayLike],
-      max_value: Union[float, npt.ArrayLike],
-      frozen: bool = False,
-      modifier: ModifierFn = None
+    self,
+    name: str,
+    nominal: float | npt.ArrayLike,
+    min_value: float | npt.ArrayLike,
+    max_value: float | npt.ArrayLike,
+    frozen: bool = False,
+    modifier: ModifierFn | None = None,
   ):
     self.name = name
     self.nominal = np.atleast_1d(nominal)
@@ -60,35 +71,41 @@ class Parameter:
   def shape(self) -> tuple[int, ...]:
     return self.nominal.shape
 
-  def apply_modifier(self, spec):
+  def apply_modifier(self, spec: mujoco.MjSpec) -> None:
+    """Apply this parameter's modifier callback to *spec*, if one is set."""
     if self.modifier:
       self.modifier(spec, self)
 
   def as_vector(self) -> np.ndarray:
+    """Return the current value as a flat 1-D array."""
     return self.value.flatten()
 
   def as_nominal_vector(self) -> np.ndarray:
+    """Return the nominal value as a flat 1-D array."""
     return self.nominal.flatten()
 
   def update_from_vector(self, vector: np.ndarray) -> None:
     vector_array = np.atleast_1d(vector)
     if len(vector_array) != self.size:
       raise ValueError(
-          f"Input vector length {vector_array.size} does not match "
-          f"parameter size {self.size}."
+        f"Input vector length {vector_array.size} does not match "
+        f"parameter size {self.size}."
       )
     self.value = vector_array.reshape(self.shape)
 
   def get_bounds(self) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(lower, upper)`` bound arrays, each flat 1-D."""
     return (
-        self.min_value.flatten(),
-        self.max_value.flatten(),
+      self.min_value.flatten(),
+      self.max_value.flatten(),
     )
 
   def reset(self) -> None:
+    """Reset the current value to nominal."""
     self.value = self.nominal.copy()
 
   def sample(self, rng: np.random.Generator | None = None) -> np.ndarray:
+    """Sample a random value uniformly within bounds."""
     if rng is None:
       rng = np.random.default_rng()
     return rng.uniform(self.min_value.flatten(), self.max_value.flatten())
@@ -97,17 +114,17 @@ class Parameter:
     """Return a string representation of the parameter."""
     if self.size == 1:
       return (
-          f"{Fore.CYAN}{self.name}{Style.RESET_ALL}: "
-          f"{Fore.GREEN}{float(self.value.item()):.3g}{Style.RESET_ALL} "
-          f"∈ [{Fore.YELLOW}{float(self.min_value.item()):.3g}, "
-          f"{float(self.max_value.item()):.3g}{Style.RESET_ALL}]"
+        f"{Fore.CYAN}{self.name}{Style.RESET_ALL}: "
+        f"{Fore.GREEN}{float(self.value.item()):.3g}{Style.RESET_ALL} "
+        f"∈ [{Fore.YELLOW}{float(self.min_value.item()):.3g}, "
+        f"{float(self.max_value.item()):.3g}{Style.RESET_ALL}]"
       )
     else:
       return (
-          f"{Fore.CYAN}{self.name}{Style.RESET_ALL}: "
-          f"{Fore.GREEN}array(shape={self.shape}){Style.RESET_ALL} "
-          f"∈ [{Fore.YELLOW}min={np.min(self.min_value):.3g}, "
-          f"max={np.max(self.max_value):.3g}{Style.RESET_ALL}]"
+        f"{Fore.CYAN}{self.name}{Style.RESET_ALL}: "
+        f"{Fore.GREEN}array(shape={self.shape}){Style.RESET_ALL} "
+        f"∈ [{Fore.YELLOW}min={np.min(self.min_value):.3g}, "
+        f"max={np.max(self.max_value):.3g}{Style.RESET_ALL}]"
       )
 
   def __repr__(self) -> str:
@@ -115,12 +132,20 @@ class Parameter:
 
   def __getstate__(self):
     return {
-        "name": self.name,
-        "nominal": self.nominal.tolist() if isinstance(self.nominal, np.ndarray) else self.nominal,
-        "min_value": self.min_value.tolist() if isinstance(self.min_value, np.ndarray) else self.min_value,
-        "max_value": self.max_value.tolist() if isinstance(self.max_value, np.ndarray) else self.max_value,
-        "value": self.value.tolist() if isinstance(self.value, np.ndarray) else self.value,
-        "frozen": self.frozen,
+      "name": self.name,
+      "nominal": self.nominal.tolist()
+      if isinstance(self.nominal, np.ndarray)
+      else self.nominal,
+      "min_value": self.min_value.tolist()
+      if isinstance(self.min_value, np.ndarray)
+      else self.min_value,
+      "max_value": self.max_value.tolist()
+      if isinstance(self.max_value, np.ndarray)
+      else self.max_value,
+      "value": self.value.tolist()
+      if isinstance(self.value, np.ndarray)
+      else self.value,
+      "frozen": self.frozen,
     }
 
   def __setstate__(self, state):
@@ -136,13 +161,22 @@ class Parameter:
     cls = self.__class__
     result = cls.__new__(cls)
     for k, v in self.__dict__.items():
-        setattr(result, k, copy.deepcopy(v, memo))
+      setattr(result, k, copy.deepcopy(v, memo))
     return result
 
-class ParameterDict:
-  """A dictionary of parameters for system identification."""
 
-  def __init__(self, parameters: Optional[Dict[str, Parameter]] = None):
+class ParameterDict:
+  """An ordered collection of :class:`Parameter` objects.
+
+  Behaves like a ``dict[str, Parameter]`` with convenience methods for
+  vectorised access (``as_vector`` / ``update_from_vector``), serialisation,
+  and tabular comparison of parameter estimates.
+
+  Frozen parameters are silently skipped by vector/bounds methods so that the
+  decision-variable dimension seen by optimizers matches only the free params.
+  """
+
+  def __init__(self, parameters: dict[str, Parameter] | None = None):
     if parameters is None:
       self.parameters = {}
     else:
@@ -161,12 +195,14 @@ class ParameterDict:
     return len(self.parameters)
 
   def copy(self) -> Self:
+    """Return a deep copy of this ParameterDict."""
     return copy.deepcopy(self)
 
-  def add(self, param: Parameter):
+  def add(self, param: Parameter) -> None:
+    """Add a Parameter, keyed by its ``name``."""
     self.parameters[param.name] = param
 
-  def update(self, pdict: Self):
+  def update(self, pdict: Self) -> None:
     for keys in pdict.keys():
       if keys in self.parameters:
         raise ValueError(f"Parameter '{keys}' already exists in the dictionary.")
@@ -188,12 +224,18 @@ class ParameterDict:
 
   def as_vector(self, include_frozen=False) -> np.ndarray:
     """Convert all non-frozen parameters to a flat vector."""
-    vectors = [p.as_vector() for p in self.parameters.values() if not p.frozen or include_frozen]
+    vectors = [
+      p.as_vector() for p in self.parameters.values() if not p.frozen or include_frozen
+    ]
     return np.concatenate(vectors) if vectors else np.array([])
 
   def as_nominal_vector(self, include_frozen=False) -> np.ndarray:
     """Get the nominal values of parameters as a flat array."""
-    vectors = [p.as_nominal_vector() for p in self.parameters.values() if not p.frozen or include_frozen]
+    vectors = [
+      p.as_nominal_vector()
+      for p in self.parameters.values()
+      if not p.frozen or include_frozen
+    ]
     return np.concatenate(vectors) if vectors else np.array([])
 
   def update_from_vector(self, vector: np.ndarray) -> None:
@@ -205,18 +247,20 @@ class ParameterDict:
         param.update_from_vector(vector[start : start + size])
         start += size
 
-  def save_to_disk(self, path: pathlib.Path) -> None:
+  def save_to_disk(self, path: str | pathlib.Path) -> None:
     """Save the parameter dictionary to disk (schema and data).
 
     Args:
       path: Path where the data will be saved.
     """
-    parameter_dicts = {name: param.__getstate__() for name, param in self.parameters.items()}
-    with open(path, 'w') as handle:
-        yaml.safe_dump(parameter_dicts, handle, default_flow_style=False)
+    parameter_dicts = {
+      name: param.__getstate__() for name, param in self.parameters.items()
+    }
+    with open(path, "w") as handle:
+      yaml.safe_dump(parameter_dicts, handle, default_flow_style=False)
 
   @classmethod
-  def load_from_disk(cls, path: pathlib.Path) -> "ParameterDict":
+  def load_from_disk(cls, path: str | pathlib.Path) -> "ParameterDict":
     """Load parameter dictionary from disk (schema and data).
 
     Args:
@@ -225,8 +269,8 @@ class ParameterDict:
     Returns:
       A new ParameterDict object.
     """
-    with open(path, 'r') as handle:
-        parameter_dicts = yaml.safe_load(handle)
+    with open(path, "r") as handle:
+      parameter_dicts = yaml.safe_load(handle)
 
     parameters = {}
     for name, param_dict in parameter_dicts.items():
@@ -247,8 +291,8 @@ class ParameterDict:
         upper_bounds.append(ub)
 
     return (
-        np.concatenate(lower_bounds) if lower_bounds else np.array([]),
-        np.concatenate(upper_bounds) if upper_bounds else np.array([]),
+      np.concatenate(lower_bounds) if lower_bounds else np.array([]),
+      np.concatenate(upper_bounds) if upper_bounds else np.array([]),
     )
 
   def reset(self) -> None:
@@ -256,25 +300,25 @@ class ParameterDict:
     for param in self.parameters.values():
       param.reset()
 
-  def sample(self, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+  def sample(self, rng: np.random.Generator | None = None) -> np.ndarray:
     """Sample parameter values within bounds for non-frozen parameters."""
     if rng is None:
       rng = np.random.default_rng()
     lower_bounds, upper_bounds = self.get_bounds()
     return rng.uniform(lower_bounds, upper_bounds)
 
-  def randomize(self, rng: Optional[np.random.Generator] = None) -> None:
+  def randomize(self, rng: np.random.Generator | None = None) -> None:
     """Randomize parameter values for non-frozen parameters."""
     for param in self.parameters.values():
       if not param.frozen:
         param.value = param.sample(rng)
 
   def compare_parameters(
-      self,
-      init_params: Optional[np.ndarray],
-      predicted_params: Optional[np.ndarray],
-      measured_params: Optional[np.ndarray] = None,
-      sig_digits: int = 4,
+    self,
+    init_params: np.ndarray,
+    predicted_params: np.ndarray,
+    measured_params: np.ndarray | None = None,
+    sig_digits: int = 4,
   ) -> str:
     """Compare true and predicted parameter values.
 
@@ -295,35 +339,34 @@ class ParameterDict:
 
     if len(init_params) != non_frozen_vector.size:
       raise ValueError(
-          f"Initial parameter vector length {len(init_params)} does not match "
-          f"the number of non-frozen parameters {non_frozen_vector.size}."
+        f"Initial parameter vector length {len(init_params)} does not match "
+        f"the number of non-frozen parameters {non_frozen_vector.size}."
       )
 
     if len(predicted_params) != non_frozen_vector.size:
       raise ValueError(
-          f"Predicted parameter vector length {len(predicted_params)} does not match "
-          f"the number of non-frozen parameters {non_frozen_vector.size}."
+        f"Predicted parameter vector length {len(predicted_params)} does not match "
+        f"the number of non-frozen parameters {non_frozen_vector.size}."
       )
 
     if measured_params is not None:
       if len(measured_params) != non_frozen_vector.size:
         raise ValueError(
-            f"True parameter vector length {len(measured_params)} does not match "
-            f"the number of non-frozen parameters {non_frozen_vector.size}."
+          f"True parameter vector length {len(measured_params)} does not match "
+          f"the number of non-frozen parameters {non_frozen_vector.size}."
         )
 
     # Compute error metrics.
     rel_deltas = []
     for i in range(predicted_params.shape[0]):
       if (
-          init_params[i] == 0
-          or np.abs(predicted_params[i] - init_params[i]) / np.abs(init_params[i])
-          > 2e1
+        init_params[i] == 0
+        or np.abs(predicted_params[i] - init_params[i]) / np.abs(init_params[i]) > 2e1
       ):
         rel_deltas.append(np.nan)
       else:
         rel_deltas.append(
-            np.abs(predicted_params[i] - init_params[i]) / np.abs(init_params[i])
+          np.abs(predicted_params[i] - init_params[i]) / np.abs(init_params[i])
         )
     rel_deltas = np.array(rel_deltas)
     overall_rms_delta = np.sqrt(np.mean((predicted_params - init_params) ** 2))
@@ -333,14 +376,16 @@ class ParameterDict:
       rel_errors = []
       for i in range(predicted_params.shape[0]):
         if (
-            measured_params[i] == 0
-            or np.abs(predicted_params[i] - measured_params[i]) / np.abs(measured_params[i])
-            > 2e1
+          measured_params[i] == 0
+          or np.abs(predicted_params[i] - measured_params[i])
+          / np.abs(measured_params[i])
+          > 2e1
         ):
           rel_errors.append(np.nan)
         else:
           rel_errors.append(
-              np.abs(predicted_params[i] - measured_params[i]) / np.abs(measured_params[i])
+            np.abs(predicted_params[i] - measured_params[i])
+            / np.abs(measured_params[i])
           )
       rel_errors = np.array(rel_errors)
 
@@ -348,6 +393,8 @@ class ParameterDict:
       abs_errors = np.abs(predicted_params - measured_params)
     else:
       overall_rmse = np.nan
+      abs_errors = np.full_like(predicted_params, np.nan)
+      rel_errors = np.full_like(predicted_params, np.nan)
 
     lower_bounds, upper_bounds = self.get_bounds()
 
@@ -382,7 +429,7 @@ class ParameterDict:
 
       # If a parameter is near the boundary make it magneta
       if (abs(est - lower_bound) < 1e-8 + 1e-3 * abs(lower_bound)) or (
-          abs(est - upper_bound) < 1e-8 + 1e-3 * abs(upper_bound)
+        abs(est - upper_bound) < 1e-8 + 1e-3 * abs(upper_bound)
       ):
         color = Fore.MAGENTA
       else:
@@ -393,7 +440,7 @@ class ParameterDict:
 
       # Format all values with appropriate colors
       if np.isnan(true):
-        measured_val = f""
+        measured_val = ""
       else:
         measured_val = f"{Fore.BLUE}{format_number(true)}{Style.RESET_ALL}"
       init_val = f"{Fore.BLUE}{format_number(init)}{Style.RESET_ALL}"
@@ -403,32 +450,32 @@ class ParameterDict:
       upper_bound_val = f"{Fore.BLUE}{format_number(upper_bound)}{Style.RESET_ALL}"
 
       if np.isnan(error):
-        abs_err_val = f""
+        abs_err_val = ""
       else:
         abs_err_val = f"{color}{format_number(error)}{Style.RESET_ALL}"
       abs_delta_val = f"{color}{format_number(delta)}{Style.RESET_ALL}"
 
       if np.isnan(rel_err):
-        rel_err_val = f""
+        rel_err_val = ""
       else:
         rel_err_val = f"{color}{rel_err * 100:.1f}%{Style.RESET_ALL}"
 
       if np.isnan(rel_delta):
-        rel_delta_val = f""
+        rel_delta_val = ""
       else:
         rel_delta_val = f"{color}{rel_delta * 100:.1f}%{Style.RESET_ALL}"
 
       return [
-          f"{Fore.CYAN}{param_name.ljust(20)}{Style.RESET_ALL}",
-          measured_val,
-          init_val,
-          est_val,
-          lower_bound_val,
-          upper_bound_val,
-          abs_err_val,
-          abs_delta_val,
-          rel_err_val,
-          rel_delta_val,
+        f"{Fore.CYAN}{param_name.ljust(20)}{Style.RESET_ALL}",
+        init_val,
+        measured_val,
+        est_val,
+        lower_bound_val,
+        upper_bound_val,
+        abs_err_val,
+        abs_delta_val,
+        rel_err_val,
+        rel_delta_val,
       ]
 
     # Build table data.
@@ -455,21 +502,23 @@ class ParameterDict:
 
     # Create and return the formatted table.
     headers = [
-        "Parameter",
-        "True",
-        "Initial",
-        "Estimate",
-        "Lower",
-        "Upper",
-        "Abs Err",
-        "Abs Del",
-        "Rel Err",
-        "Rel Del",
+      "Parameter",
+      "Initial",
+      "Nominal",
+      "Identified",
+      "Lower",
+      "Upper",
+      "Abs Err",
+      "Abs Del",
+      "Rel Err",
+      "Rel Del",
     ]
 
-    table = tabulate(table_data, headers=headers, tablefmt="outline", disable_numparse=True)
-    
-    overall_rmse_val = f"" if np.isnan(overall_rmse) else f"{overall_rmse:.4g}"
+    table = tabulate(
+      table_data, headers=headers, tablefmt="outline", disable_numparse=True
+    )
+
+    overall_rmse_val = "" if np.isnan(overall_rmse) else f"{overall_rmse:.4g}"
     overall_rms_delta_val = f"{overall_rms_delta:.4g}"
 
     return f"{table}\nRMSE: {overall_rmse_val}\nRMS Delta: {overall_rms_delta_val}"
@@ -489,19 +538,19 @@ class ParameterDict:
         if param.shape == (param.size,):  # 1D array
           for i in range(param.size):
             param_strings.append(
-                f"    [{i}]: {Fore.GREEN}{param.value[i]:.3g}{Style.RESET_ALL} "
-                f"∈ [{Fore.YELLOW}{param.min_value[i]:.3g}, "
-                f"{param.max_value[i]:.3g}{Style.RESET_ALL}]"
+              f"    [{i}]: {Fore.GREEN}{param.value[i]:.3g}{Style.RESET_ALL} "
+              f"∈ [{Fore.YELLOW}{param.min_value[i]:.3g}, "
+              f"{param.max_value[i]:.3g}{Style.RESET_ALL}]"
             )
         else:  # Multi-dimensional array
           flat_idx = 0
           for idx in np.ndindex(param.shape):
             idx_str = ",".join(str(x) for x in idx)
             param_strings.append(
-                f"    [{idx_str}]:"
-                f" {Fore.GREEN}{param.value[idx]:.3g}{Style.RESET_ALL} ∈"
-                f" [{Fore.YELLOW}{param.min_value.flat[flat_idx]:.3g},"
-                f" {param.max_value.flat[flat_idx]:.3g}{Style.RESET_ALL}]"
+              f"    [{idx_str}]:"
+              f" {Fore.GREEN}{param.value[idx]:.3g}{Style.RESET_ALL} ∈"
+              f" [{Fore.YELLOW}{param.min_value.flat[flat_idx]:.3g},"
+              f" {param.max_value.flat[flat_idx]:.3g}{Style.RESET_ALL}]"
             )
             flat_idx += 1
 
@@ -540,18 +589,18 @@ class ParameterDict:
     info = []
     info.append(f"{Fore.CYAN}Parameter Information:{Style.RESET_ALL}")
     info.append(
-        f"{Fore.CYAN}{'Name':<20} {'Size':<10} {'Shape':<15} {'Frozen':<10}{Style.RESET_ALL}"
+      f"{Fore.CYAN}{'Name':<20} {'Size':<10} {'Shape':<15} {'Frozen':<10}{Style.RESET_ALL}"
     )
     info.append("-" * 60)
 
     for name, param in self.parameters.items():
       frozen_str = (
-          f"{Fore.RED}Yes{Style.RESET_ALL}"
-          if param.frozen
-          else f"{Fore.GREEN}No{Style.RESET_ALL}"
+        f"{Fore.RED}Yes{Style.RESET_ALL}"
+        if param.frozen
+        else f"{Fore.GREEN}No{Style.RESET_ALL}"
       )
       info.append(
-          f"{Fore.CYAN}{name:<20} {param.size:<10} {str(param.shape):<15} {frozen_str}{Style.RESET_ALL}"
+        f"{Fore.CYAN}{name:<20} {param.size:<10} {str(param.shape):<15} {frozen_str}{Style.RESET_ALL}"
       )
 
     return "\n".join(info)

@@ -21,6 +21,14 @@
       --toc-link-bg: #f4f6f8;
       --toc-link-hover: #0d6efd;
       --toc-link-hover-text: #fff;
+      /* Semantic Colors - Light Default */
+      --color-initial: #d32f2f;
+      --color-nominal: #388e3c;
+      --color-optimized: #1976d2;
+      --color-success: #2e7d32;
+      --color-warning: #f57c00;
+      --color-error: #c62828;
+      --color-boundary: #7b1fa2;
     }
 
     [data-theme="dark"] {
@@ -36,6 +44,54 @@
       --toc-link-bg: #2d2d2d;
       --toc-link-hover: #6ea8fe;
       --toc-link-hover-text: #121212;
+      /* Semantic Colors - Dark Default */
+      --color-initial: #ef5350;
+      --color-nominal: #66bb6a;
+      --color-optimized: #42a5f5;
+      --color-success: #4caf50;
+      --color-warning: #ff9800;
+      --color-error: #f44336;
+      --color-boundary: #ab47bc;
+    }
+
+    /* Colorblind-friendly overrides (applied via data-colorscheme) */
+    [data-colorscheme="colorblind"] {
+      --color-initial: #d55e00;
+      --color-nominal: #0072b2;
+      --color-optimized: #cc79a7;
+      --color-success: #009e73;
+      --color-warning: #f0e442;
+      --color-error: #d55e00;
+      --color-boundary: #cc79a7;
+    }
+
+    /* Semantic color helper classes for inline use */
+    .color-initial {
+      color: var(--color-initial);
+    }
+
+    .color-nominal {
+      color: var(--color-nominal);
+    }
+
+    .color-optimized {
+      color: var(--color-optimized);
+    }
+
+    .color-success {
+      color: var(--color-success);
+    }
+
+    .color-warning {
+      color: var(--color-warning);
+    }
+
+    .color-error {
+      color: var(--color-error);
+    }
+
+    .color-boundary {
+      color: var(--color-boundary);
     }
 
     * {
@@ -229,7 +285,8 @@
     }
 
     /* Toggle Button */
-    #theme-toggle {
+    #theme-toggle,
+    #colorscheme-toggle {
       background: none;
       border: 1px solid var(--border-color);
       border-radius: 2rem;
@@ -243,8 +300,114 @@
       gap: 0.5rem;
     }
 
-    #theme-toggle:hover {
+    #theme-toggle:hover,
+    #colorscheme-toggle:hover {
       background-color: var(--bg-color);
+    }
+
+    /* Header Controls */
+    .header-controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    /* Color Scheme Dropdown */
+    .color-scheme-dropdown {
+      position: relative;
+    }
+
+    .color-panel {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      right: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 1rem;
+      z-index: 1000;
+      min-width: 220px;
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .color-panel.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .color-panel-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .color-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0.75rem;
+      border: none;
+      background: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      color: var(--text-color);
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: background-color 0.15s ease;
+    }
+
+    .color-option:hover {
+      background-color: var(--bg-color);
+    }
+
+    .color-option.active {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .color-swatch {
+      display: flex;
+      gap: 3px;
+    }
+
+    .color-swatch span {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+
+    .swatch-default .c1 {
+      background: #ef5350;
+    }
+
+    .swatch-default .c2 {
+      background: #66bb6a;
+    }
+
+    .swatch-default .c3 {
+      background: #42a5f5;
+    }
+
+    .swatch-colorblind .c1 {
+      background: #d55e00;
+    }
+
+    .swatch-colorblind .c2 {
+      background: #0072b2;
+    }
+
+    .swatch-colorblind .c3 {
+      background: #cc79a7;
     }
 
     /* Back to Top */
@@ -303,9 +466,35 @@
         <div class="report-meta">Generated at {{ report_timestamp }}</div>
         {% endif %}
       </div>
-      <button id="theme-toggle" onclick="toggleTheme()">
-        <span>🌗</span> Toggle Theme
-      </button>
+      <div class="header-controls">
+        <button id="theme-toggle" onclick="toggleTheme()">
+          <span>🌗</span> Theme
+        </button>
+        <div class="color-scheme-dropdown">
+          <button id="colorscheme-toggle" onclick="toggleColorSchemePanel()">
+            <span>🎨</span> Colors
+          </button>
+          <div id="color-panel" class="color-panel">
+            <div class="color-panel-title">Color Scheme</div>
+            <button class="color-option active" data-scheme="default" onclick="setColorScheme('default')">
+              <div class="color-swatch swatch-default">
+                <span class="c1"></span>
+                <span class="c2"></span>
+                <span class="c3"></span>
+              </div>
+              Default
+            </button>
+            <button class="color-option" data-scheme="colorblind" onclick="setColorScheme('colorblind')">
+              <div class="color-swatch swatch-colorblind">
+                <span class="c1"></span>
+                <span class="c2"></span>
+                <span class="c3"></span>
+              </div>
+              Colorblind Safe
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -397,6 +586,47 @@
     } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       document.body.setAttribute('data-theme', 'dark');
       startTheme = 'dark';
+    }
+
+    // Color Scheme Logic
+    function toggleColorSchemePanel() {
+      const panel = document.getElementById('color-panel');
+      panel.classList.toggle('visible');
+    }
+
+    function setColorScheme(scheme) {
+      // Update body attribute
+      if (scheme === 'colorblind') {
+        document.body.setAttribute('data-colorscheme', 'colorblind');
+      } else {
+        document.body.removeAttribute('data-colorscheme');
+      }
+      localStorage.setItem('colorscheme', scheme);
+
+      // Update active state on buttons
+      document.querySelectorAll('.color-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.scheme === scheme);
+      });
+
+      // Close panel
+      document.getElementById('color-panel').classList.remove('visible');
+    }
+
+    // Close panel when clicking outside
+    document.addEventListener('click', (e) => {
+      const dropdown = document.querySelector('.color-scheme-dropdown');
+      if (dropdown && !dropdown.contains(e.target)) {
+        document.getElementById('color-panel').classList.remove('visible');
+      }
+    });
+
+    // Load saved color scheme
+    const savedColorScheme = localStorage.getItem('colorscheme');
+    if (savedColorScheme === 'colorblind') {
+      document.body.setAttribute('data-colorscheme', 'colorblind');
+      document.querySelectorAll('.color-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.scheme === 'colorblind');
+      });
     }
 
     // Apply plot theme on load (wait for plotly to init?)

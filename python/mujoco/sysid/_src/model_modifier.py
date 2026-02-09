@@ -1,26 +1,12 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """Model modifiers."""
 
 from enum import Enum
-from typing import Callable, Optional
+from typing import Any
 
 import mujoco
-from mujoco.sysid.parameter import Parameter, ParameterDict, ModifierFn
 import numpy as np
-from mujoco.sysid.parameter import ParameterDict
+
+from mujoco.sysid._src.parameter import ModifierFn, Parameter, ParameterDict
 
 
 def remove_visuals(in_spec: mujoco.MjSpec) -> mujoco.MjSpec:
@@ -32,7 +18,7 @@ def remove_visuals(in_spec: mujoco.MjSpec) -> mujoco.MjSpec:
       if geom.type == mujoco.mjtGeom.mjGEOM_MESH and geom.meshname != "":
         meshname = geom.meshname
         mesh = spec.mesh(meshname)
-        if mesh: # multiple geoms can ref same mesh.
+        if mesh:  # multiple geoms can ref same mesh.
           spec.delete(mesh)
       spec.delete(geom)
 
@@ -41,10 +27,11 @@ def remove_visuals(in_spec: mujoco.MjSpec) -> mujoco.MjSpec:
   for tex in spec.textures:
     spec.delete(tex)
 
-  spec.compile()
+  spec.compile()  # TODO: is this compile necessary?
   return spec
 
-def _get_obj_or_raise(spec: mujoco.MjSpec, obj_type: str, obj_name: str):
+
+def _get_obj_or_raise(spec: mujoco.MjSpec, obj_type: str, obj_name: str) -> Any:
   getter = getattr(spec, obj_type, None)
   if not callable(getter):
     raise AttributeError(f"MjSpec has no method '{obj_type}'")
@@ -53,24 +40,25 @@ def _get_obj_or_raise(spec: mujoco.MjSpec, obj_type: str, obj_name: str):
     raise ValueError(f"{obj_type.capitalize()} '{obj_name}' not found in spec.")
   return obj
 
-def apply_param_modifiers_spec(
-      params: ParameterDict, spec: mujoco.MjSpec
-  )-> mujoco.MjModel:
-    for key in params.keys():
-      param = params[key]
-      if not param.frozen:
-        param.apply_modifier(spec)
-    return spec
 
-def apply_param_modifiers(
-      params: ParameterDict, spec: mujoco.MjSpec
-  )-> mujoco.MjModel:
-    return apply_param_modifiers_spec(params, spec).compile()
+def apply_param_modifiers_spec(
+  params: ParameterDict, spec: mujoco.MjSpec
+) -> mujoco.MjSpec:
+  for key in params.keys():
+    param = params[key]
+    if not param.frozen:
+      param.apply_modifier(spec)
+  return spec
+
+
+def apply_param_modifiers(params: ParameterDict, spec: mujoco.MjSpec) -> mujoco.MjModel:
+  return apply_param_modifiers_spec(params, spec).compile()
 
 
 def _infer_inertial(spec: mujoco.MjSpec, body_name: str) -> mujoco.MjsBody:
   """Override spec inertia using inferred inertia from compiled model."""
   body = _get_obj_or_raise(spec, "body", body_name)
+  assert isinstance(body, mujoco.MjsBody)
   spec.compiler.inertiafromgeom = 2
   model = spec.compile()
   body.explicitinertial = True
@@ -88,20 +76,17 @@ def is_position_actuator(actuator) -> bool:
   This function works on both model.actuator and spec.actuator objects.
   """
   return (
-      actuator.gaintype == mujoco.mjtGain.mjGAIN_FIXED
-      and actuator.biastype == mujoco.mjtBias.mjBIAS_AFFINE
-      and actuator.dyntype
-      in (mujoco.mjtDyn.mjDYN_NONE, mujoco.mjtDyn.mjDYN_FILTEREXACT)
-      and actuator.gainprm[0] == -actuator.biasprm[1]
+    actuator.gaintype == mujoco.mjtGain.mjGAIN_FIXED
+    and actuator.biastype == mujoco.mjtBias.mjBIAS_AFFINE
+    and actuator.dyntype in (mujoco.mjtDyn.mjDYN_NONE, mujoco.mjtDyn.mjDYN_FILTEREXACT)
+    and actuator.gainprm[0] == -actuator.biasprm[1]
   )
 
 
 def get_actuator_pd_gains(
-    model: mujoco.MjModel, actuator_name: str
+  model: mujoco.MjModel, actuator_name: str
 ) -> tuple[float, float]:
-  actuator_id = mujoco.mj_name2id(
-      model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_name
-  )
+  actuator_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_name)
   if actuator_id == -1:
     raise ValueError(f"Actuator {actuator_name} not found in model.")
   actuator = model.actuator(actuator_id)
@@ -111,12 +96,13 @@ def get_actuator_pd_gains(
 
 
 def apply_pgain(
-    spec: mujoco.MjSpec,
-    actuator_name: str,
-    value: np.ndarray,
+  spec: mujoco.MjSpec,
+  actuator_name: str,
+  value: float | np.ndarray,
 ) -> mujoco.MjSpec:
   # TODO: assert scalar
   actuator = _get_obj_or_raise(spec, "actuator", actuator_name)
+  assert isinstance(actuator, mujoco.MjsActuator)
   if not is_position_actuator(actuator):
     raise ValueError(f"Actuator {actuator_name} is not a position actuator.")
   actuator.gainprm[0] = value
@@ -125,12 +111,13 @@ def apply_pgain(
 
 
 def apply_dgain(
-    spec: mujoco.MjSpec,
-    actuator_name: str,
-    value: np.ndarray,
+  spec: mujoco.MjSpec,
+  actuator_name: str,
+  value: float | np.ndarray,
 ) -> mujoco.MjSpec:
   # TODO: assert scalar
   actuator = _get_obj_or_raise(spec, "actuator", actuator_name)
+  assert isinstance(actuator, mujoco.MjsActuator)
   if not is_position_actuator(actuator):
     raise ValueError(f"Actuator {actuator_name} is not a position actuator.")
   actuator.biasprm[2] = -value
@@ -138,9 +125,9 @@ def apply_dgain(
 
 
 def apply_pdgain(
-    spec: mujoco.MjSpec,
-    actuator_name: str,
-    value: np.ndarray,
+  spec: mujoco.MjSpec,
+  actuator_name: str,
+  value: np.ndarray,
 ) -> mujoco.MjSpec:
   if value.size != 2:
     raise ValueError(f"pdgain must be a 2-element array, got {value.size}.")
@@ -150,29 +137,29 @@ def apply_pdgain(
 
 
 def apply_body_mass_ipos(
-    spec: mujoco.MjSpec,
-    body_name: str,
-    mass: Optional[np.ndarray] = None,
-    ipos: Optional[np.ndarray] = None,
-    rot_inertia_scale: bool = False,
+  spec: mujoco.MjSpec,
+  body_name: str,
+  mass: np.ndarray | None = None,
+  ipos: np.ndarray | None = None,
+  rot_inertia_scale: bool = False,
 ) -> mujoco.MjSpec:
   # TODO: assert mass and ipos shapes
   body = _infer_inertial(spec, body_name)
   mass_original = body.mass
   if mass is not None:
     body.mass = mass
-  if rot_inertia_scale:
-    scale = mass / mass_original
-    body.inertia *= scale
+    if rot_inertia_scale:
+      scale = mass / mass_original
+      body.inertia *= scale
   if ipos is not None:
     body.ipos = ipos
   return spec
 
 
 def scale_body_inertia(
-    spec: mujoco.MjSpec,
-    body_name: str,
-    value: np.ndarray,
+  spec: mujoco.MjSpec,
+  body_name: str,
+  value: np.ndarray,
 ) -> mujoco.MjSpec:
   # TODO: assert scalar
   body = _infer_inertial(spec, body_name)
@@ -339,9 +326,9 @@ def theta_inertia_from_body(spec: mujoco.MjSpec, body_name: str) -> np.ndarray:
 
 
 def apply_body_theta_inertia(
-    spec: mujoco.MjSpec,
-    body_name: str,
-    theta: np.ndarray,
+  spec: mujoco.MjSpec,
+  body_name: str,
+  theta: np.ndarray,
 ) -> mujoco.MjSpec:
   if theta.size != 10:
     raise ValueError(f"theta must be a 10-element array, got {theta.size}.")
@@ -371,37 +358,48 @@ def apply_body_theta_inertia(
 
   return spec
 
+
 def apply_body_inertia(spec: mujoco.MjSpec, name: str, param: Parameter):
-    if not hasattr(param, "inertia_type"):
-      raise ValueError(f"Parameter {param.name} does not have inertia_type attribute.")
-    
-    if param.inertia_type == InertiaType.Mass:
-      apply_body_mass_ipos(spec, name, mass=param.value, rot_inertia_scale=param.scale_rot_inertia)
+  if not hasattr(param, "inertia_type"):
+    raise ValueError(f"Parameter {param.name} does not have inertia_type attribute.")
 
-    elif param.inertia_type == InertiaType.MassIpos:
-      apply_body_mass_ipos(spec, name, mass=param.value[0], ipos=param.value[1:4], rot_inertia_scale=param.scale_rot_inertia)
+  if param.inertia_type == InertiaType.Mass:
+    apply_body_mass_ipos(
+      spec, name, mass=param.value, rot_inertia_scale=param.scale_rot_inertia
+    )
 
-    elif param.inertia_type == InertiaType.Pseudo:
-      apply_body_theta_inertia(spec, name, param.value)
+  elif param.inertia_type == InertiaType.MassIpos:
+    apply_body_mass_ipos(
+      spec,
+      name,
+      mass=param.value[0],
+      ipos=param.value[1:4],
+      rot_inertia_scale=param.scale_rot_inertia,
+    )
+
+  elif param.inertia_type == InertiaType.Pseudo:
+    apply_body_theta_inertia(spec, name, param.value)
+
 
 class InertiaType(Enum):
   Mass = 0
   MassIpos = 1
   Pseudo = 2
 
+
 def body_inertia_param(
-    spec: mujoco.MjSpec,
-    model: mujoco.MjModel,
-    body_name: str,
-    inertia_type: InertiaType = InertiaType.MassIpos,
-    scale_rot_inertia: bool = False,
-    mass_bound_mult: np.ndarray = np.array([0.1, 10.0]),
-    ipos_bound_off: np.ndarray = np.array([-0.5, 0.5]),
-    stretch_bound_mult: np.ndarray = np.array([0.5, 2.0]),
-    shear_bound_off: np.ndarray = np.array([-0.5, 0.5]),
-    param_name=None,
-    modifier: Optional[ModifierFn] = None,
-) -> ParameterDict:
+  spec: mujoco.MjSpec,
+  model: mujoco.MjModel,
+  body_name: str,
+  inertia_type: InertiaType = InertiaType.MassIpos,
+  scale_rot_inertia: bool = False,
+  mass_bound_mult: np.ndarray | None = None,
+  ipos_bound_off: np.ndarray | None = None,
+  stretch_bound_mult: np.ndarray | None = None,
+  shear_bound_off: np.ndarray | None = None,
+  param_name: str | None = None,
+  modifier: ModifierFn | None = None,
+) -> Parameter:
   """Creates Parameter objects for the inertia of a body in a simplified manner.
 
   Args:
@@ -416,65 +414,94 @@ def body_inertia_param(
       pseudo-inertia parameterization.
     shear_bound_off: Additive bounds for the shear parameters in the pseudo-inertia
       parameterization.
-    param_name: Optional name for the parameter. If None, a default name will be
-      {body_name}_inertia.
-    use_default_modifier: Whether to register the default inertia application function
-      to the constructed Parameter."""
+    param_name: Optional name for the parameter.  Defaults to
+      ``"{body_name}_inertia"``.
+    modifier: Optional custom modifier callback.  If None, the default
+      :func:`apply_body_inertia` modifier is registered on the Parameter."""
+
+  if mass_bound_mult is None:
+    mass_bound_mult = np.array([0.1, 10.0])
+  if ipos_bound_off is None:
+    ipos_bound_off = np.array([-0.5, 0.5])
+  if stretch_bound_mult is None:
+    stretch_bound_mult = np.array([0.5, 2.0])
+  if shear_bound_off is None:
+    shear_bound_off = np.array([-0.5, 0.5])
 
   body = model.body(body_name)
   if param_name is None:
     param_name = f"{body_name}_inertia"
 
   if modifier is None:
-    modifier = lambda spec, param: apply_body_inertia(spec, body_name, param)
+
+    def _default_modifier(spec, param):
+      return apply_body_inertia(spec, body_name, param)
+
+    modifier = _default_modifier
 
   if inertia_type == InertiaType.Mass:
-    param = Parameter(param_name, body.mass, body.mass * mass_bound_mult[0], body.mass * mass_bound_mult[1],
-                      modifier=modifier)
+    param = Parameter(
+      param_name,
+      body.mass,
+      body.mass * mass_bound_mult[0],
+      body.mass * mass_bound_mult[1],
+      modifier=modifier,
+    )
     param.inertia_type = inertia_type
     param.scale_rot_inertia = scale_rot_inertia
 
-  if inertia_type == InertiaType.MassIpos:
+  elif inertia_type == InertiaType.MassIpos:
     massipos0 = np.concatenate((body.mass, body.ipos))
-    massipos_low = np.concatenate((body.mass * mass_bound_mult[0], body.ipos + ipos_bound_off[0]))
-    massipos_high = np.concatenate((body.mass * mass_bound_mult[1], body.ipos + ipos_bound_off[1]))
-    param = Parameter(param_name, massipos0, massipos_low, massipos_high, modifier=modifier)
+    massipos_low = np.concatenate(
+      (body.mass * mass_bound_mult[0], body.ipos + ipos_bound_off[0])
+    )
+    massipos_high = np.concatenate(
+      (body.mass * mass_bound_mult[1], body.ipos + ipos_bound_off[1])
+    )
+    param = Parameter(
+      param_name, massipos0, massipos_low, massipos_high, modifier=modifier
+    )
     param.inertia_type = inertia_type
     param.scale_rot_inertia = scale_rot_inertia
 
-  # Link inertia.
-  if inertia_type == InertiaType.Pseudo:
+  elif inertia_type == InertiaType.Pseudo:
     theta_i_0 = theta_inertia_from_body(spec, body_name)
 
     # mass = exp(2*alpha)
     alpha = theta_i_0[0]
-    mass = np.exp(2*alpha)
+    mass = np.exp(2 * alpha)
     mass_bounds = mass * mass_bound_mult
     alpha_bounds = 0.5 * np.log(mass_bounds)
 
     # d1, d2, d3, stretch = exp(2*d)
     # stretches body along principal axes
-    d = theta_i_0[1:1+3]
-    stretch = np.exp(2*d)
+    d = theta_i_0[1 : 1 + 3]
+    stretch = np.exp(2 * d)
     stretch_bounds = stretch[:, np.newaxis] * np.atleast_2d(stretch_bound_mult)
     d_bounds = 0.5 * np.log(stretch_bounds)
 
     # s12, s23, s13
     # shear the body
-    s_bounds = theta_i_0[4:4+3, np.newaxis] + np.atleast_2d(shear_bound_off)
+    s_bounds = theta_i_0[4 : 4 + 3, np.newaxis] + np.atleast_2d(shear_bound_off)
 
     # t1, t2, t3
     # center of mass
     t_bounds = theta_i_0[7:10, np.newaxis] + np.atleast_2d(ipos_bound_off)
 
-    theta_bounds = np.vstack([
+    theta_bounds = np.vstack(
+      [
         alpha_bounds,
         d_bounds,
         s_bounds,
         t_bounds,
-    ])
-    param = Parameter(param_name, theta_i_0, theta_bounds[:, 0], theta_bounds[:, 1],
-                      modifier=modifier)
+      ]
+    )
+    param = Parameter(
+      param_name, theta_i_0, theta_bounds[:, 0], theta_bounds[:, 1], modifier=modifier
+    )
     param.inertia_type = inertia_type
+
+  else:
+    raise ValueError(f"Unknown inertia_type: {inertia_type}")
 
   return param
