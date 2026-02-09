@@ -111,7 +111,7 @@ if $DO_PYTHON; then
   echo "==> Installing Python package (editable)..."
   MUJOCO_PATH="$MUJOCO_DEV_PREFIX" \
   MUJOCO_PLUGIN_PATH="$REPO_ROOT/build/lib" \
-    uv pip install -e "$REPO_ROOT/python/" --no-build-isolation
+    uv pip install -e "$REPO_ROOT/python/[sysid]" --no-build-isolation
 
   echo "==> Verifying installation..."
   python -c "import mujoco; print(f'mujoco {mujoco.__version__} OK')"
