@@ -34,10 +34,68 @@ Define Parameters ──> Package Data ──> Build Residual ──> Optimize �
 
 ---
 
+### What Can You Identify?
+
+**Anything settable on `MjSpec` can be identified** via modifier callbacks. The
+convenience functions handle common cases with correct bounds; for everything
+else, write a `modifier` lambda that sets the quantity on the spec.
+
+**Physics parameters** — these change the model before simulation:
+
+| Target | Approach |
+|---|---|
+| Body mass | `body_inertia_param(..., InertiaType.Mass)` |
+| Body mass + center of mass | `body_inertia_param(..., InertiaType.MassIpos)` |
+| Full body inertia (10-D) | `body_inertia_param(..., InertiaType.Pseudo)` |
+| Actuator P/D gains | `Parameter(..., modifier=lambda s, p: apply_pgain(s, "act1", p.value[0]))` |
+| Contact friction / solref | `Parameter(..., modifier=lambda s, p: s.pair("cp").friction.__setitem__(0, p.value[0]))` |
+| Joint damping / stiffness | `Parameter(..., modifier=lambda s, p: setattr(s.joint("j1"), "damping", p.value[0]))` |
+
+**Measurement parameters** — real sensors aren't perfect. They may lag behind
+the simulation clock, have an unknown scale factor, or sit at a nonzero offset.
+These can't be set on `MjSpec` because they aren't physics — they're artifacts
+of the measurement system. `SignalTransform` (Section 4) adjusts the simulated
+or recorded signals *after* rollout to account for these:
+
+| Target | Approach |
+|---|---|
+| Sensor delay | `transform.delay("*_pos", params["delay"])` |
+| Sensor gain/scale | `transform.gain("*_torque", params["scale"])` |
+| Sensor bias/offset | `transform.bias("*_vel", params["bias"])` |
+
+#### Common recipes
+
+**Identify link masses of a robot arm:**
+
+```python
+from mujoco.sysid import body_inertia_param, InertiaType, ParameterDict
+
+params = ParameterDict()
+for link in ["link1", "link2", "link3"]:
+    params.add(body_inertia_param(spec, model, link, inertia_type=InertiaType.Mass))
+```
+
+**Identify contact friction:**
+
+```python
+from mujoco.sysid import Parameter
+
+params.add(Parameter(
+    "floor_friction",
+    nominal=1.0, min_value=0.1, max_value=3.0,
+    modifier=lambda s, p: s.pair("foot_floor").friction.__setitem__(0, p.value[0]),
+))
+```
+
+---
+
 ### 1. Define Parameters
 
 A **`Parameter`** is a named value (scalar or array) with bounds and an optional
-**modifier callback** that knows how to apply itself to a MuJoCo spec:
+**modifier callback** that knows how to apply itself to a MuJoCo spec. A
+**`ParameterDict`** collects parameters into the single vector that the
+optimizer sees — it handles flattening them into one array, writing optimizer
+updates back, and enforcing bounds:
 
 ```python
 from mujoco.sysid import Parameter, ParameterDict
@@ -272,8 +330,26 @@ Suppose you have `p = 10` parameters and `C = 3` trajectory chunks:
 
 ### 4. SignalTransform (Declarative Residual Configuration)
 
-Instead of writing a `modify_residual` callback by hand, use **`SignalTransform`**
-for the common case of delays, gains, biases, and sensor selection:
+After simulation, the residual pipeline compares predicted sensor readings to
+recorded data. But real sensors aren't ideal — position encoders may lag by a
+few milliseconds, torque sensors may have an unknown scale factor, and velocity
+estimates may sit at a nonzero offset. These aren't physics parameters (you
+can't set "delay" on an `MjSpec`), so they need to be corrected *after* the
+rollout, before the residual is computed.
+
+**`SignalTransform`** lets you declare these corrections and which sensors to
+use, without writing a custom residual callback. Internally it:
+
+1. **Time-shifts** the predicted (or measured) signals by per-sensor delay
+   parameters, resampling onto a common time grid.
+2. **Scales** sensor columns by gain parameters (`target="predicted"` scales
+   the simulation output, `target="measured"` scales the recording — useful
+   when the sensor's scale factor is unknown on either side).
+3. **Offsets** sensor columns by bias parameters.
+4. Computes the weighted difference and normalizes by RMS.
+
+Patterns use `fnmatch` syntax, so `"*_pos"` matches all sensors whose name
+ends in `_pos`:
 
 ```python
 from mujoco.sysid import SignalTransform
@@ -292,9 +368,38 @@ residual_fn = build_residual_fn(
 )
 ```
 
-`SignalTransform.apply` has the same signature as `ModifyResidualFn` and handles
-windowing, resampling, delay, gain/bias application, weighted diff, and
-normalization automatically.
+`SignalTransform.apply` has the same signature as `ModifyResidualFn`, so it
+plugs directly into `build_residual_fn`.
+
+#### What this replaces
+
+Without `SignalTransform`, you'd write the same logic by hand as a
+`modify_residual` callback using the low-level `signal_modifier` functions
+(Section 8):
+
+```python
+from mujoco.sysid._src import signal_modifier
+
+def modify_residual(params, predicted, measured, model, return_pred_all, **kw):
+    # 1. Apply delays and resample onto a common time grid.
+    min_d, max_d = -0.02, 0.05  # must track delay bounds yourself
+    measured = signal_modifier.apply_delayed_ts_window(measured, predicted, min_d, max_d)
+    sensor_delays = {"joint1_pos": params["delay_pos"].value[0], ...}
+    predicted = signal_modifier.apply_resample_and_delay(
+        predicted, measured.times, default_delay=0.0, sensor_delays=sensor_delays,
+    )
+    # 2. Apply gains and biases.
+    predicted = signal_modifier.apply_gain(predicted, "joint1_torque", params["torque_scale"])
+    predicted = signal_modifier.apply_bias(predicted, "joint1_vel", params["vel_bias"])
+    # 3. Compute residual.
+    diff = signal_modifier.weighted_diff(predicted.data, measured.data, model, weights)
+    diff = signal_modifier.normalize_residual(diff, measured.data)
+    return diff, predicted, measured
+```
+
+`SignalTransform` does all of this — including tracking delay bounds, expanding
+fnmatch patterns to sensor names, and handling the windowing/resampling
+bookkeeping — from a few declarative lines.
 
 ---
 
