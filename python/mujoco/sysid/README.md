@@ -1,25 +1,36 @@
 # System Identification Toolbox
 
-Identify physical parameters of a MuJoCo model from recorded sensor data.
-Given parameters `θ`, the library minimizes `½ ‖W(ȳ(θ) − y)‖²` subject to
-box constraints, where `ȳ` is simulated and `y` is recorded sensor output.
+Given a MuJoCo model and recorded sensor data, find the physical parameters
+that make simulation match reality. The library solves a box-constrained
+nonlinear least-squares problem, minimizing the weighted residual
+`½ ‖W(ȳ(θ) − y)‖²` between simulated output `ȳ(θ)` and recorded
+measurements `y`.
 
-The optimizer uses Gauss-Newton with finite-difference Jacobians. Every
-perturbed rollout needed for the Jacobian is independent, so they all execute
-in a single batched call to `mujoco.rollout`, fully parallelized across
-cores with no user effort.
+The optimizer uses Gauss-Newton with finite-difference Jacobians. Each
+parameter perturbation requires an independent simulation rollout, and all
+of them execute in a single batched call to `mujoco.rollout`, parallelized
+across threads.
 
 ## Pipeline
 
-```
-Define Parameters → Package Data → Build Residual → Optimize → Report
-  ParameterDict     ModelSequences  build_residual_fn  optimize   default_report
-```
+**You provide:**
+- One or more `ModelSequences` bundling your `MjSpec` with measured data.
+  Multiple `ModelSequences` with different specs can be optimized jointly.
+  For example, recordings of the same robot with and without a known payload
+  can be combined for a better-conditioned problem.
+- A `ParameterDict` defining what to identify, with bounds.
+
+**The framework:**
+- Builds a residual function (`build_residual_fn`).
+- Optimizes parameters via batched parallel rollouts (`optimize`).
+- Saves results and generates an HTML report (`save_results`, `default_report`).
 
 ## What Can You Identify?
 
-**Physics parameters** can be anything settable on `MjSpec` via a modifier
-callback, for example:
+**Physics parameters** can be anything settable on `MjSpec`. The library
+provides convenience functions for common system identification targets such
+as body inertia and actuator gains. Anything else can be set directly on the
+spec with a modifier callback:
 
 | Target | Approach |
 |---|---|
@@ -35,21 +46,9 @@ Full inertia uses the pseudo-inertia Cholesky parameterization
 guaranteeing physical consistency for any `θ`.
 
 **Measurement parameters** such as sensor delays, gains, and biases are
-configured declaratively via `SignalTransform`:
-
-| Target | Approach |
-|---|---|
-| Sensor delay | `transform.delay("*_pos", params["delay"])` |
-| Sensor gain | `transform.gain("*_torque", params["scale"])` |
-| Sensor bias | `transform.bias("*_vel", params["bias"])` |
-
-For full control, you can write a custom `modify_residual` callback using
-the low-level functions in `signal_modifier` (`apply_delay`, `apply_gain`,
-`apply_bias`, `weighted_diff`).
-
-Multiple `ModelSequences` with different specs can be optimized jointly.
-For example, recordings of the same robot with and without a known payload
-can be combined for a better-conditioned problem.
+properties of the measurement system, not the physics model. The library
+provides utilities for applying these corrections to the residual after
+rollout.
 
 ## Example
 
