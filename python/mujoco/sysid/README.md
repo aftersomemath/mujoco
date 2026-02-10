@@ -66,7 +66,10 @@ def set_link1_mass(spec, p):
 
 params = sysid.ParameterDict()
 params.add(sysid.Parameter(
-    "link1_mass", nominal=2.0, min_value=0.5, max_value=5.0,
+    "link1_mass",
+    nominal=2.0,
+    min_value=0.5,
+    max_value=5.0,
     modifier=set_link1_mass,
 ))
 
