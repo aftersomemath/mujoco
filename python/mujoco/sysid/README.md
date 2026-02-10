@@ -42,6 +42,10 @@ configured declaratively via `SignalTransform`:
 | Sensor gain | `transform.gain("*_torque", params["scale"])` |
 | Sensor bias | `transform.bias("*_vel", params["bias"])` |
 
+For full control, you can write a custom `modify_residual` callback using
+the low-level functions in `signal_modifier` (`apply_delay`, `apply_gain`,
+`apply_bias`, `weighted_diff`).
+
 Multiple `ModelSequences` with different specs can be optimized jointly.
 For example, recordings of the same robot with and without a known payload
 can share inertial parameters, stacking residuals for a better-conditioned
