@@ -45,9 +45,9 @@ else, write a `modifier` lambda that sets the quantity on the spec.
 | Body mass | `body_inertia_param(..., InertiaType.Mass)` |
 | Body mass + center of mass | `body_inertia_param(..., InertiaType.MassIpos)` |
 | Full body inertia (10-D) | `body_inertia_param(..., InertiaType.Pseudo)` |
-| Actuator P/D gains | `Parameter(..., modifier=lambda s, p: apply_pgain(s, "act1", p.value[0]))` |
-| Contact friction / solref | `Parameter(..., modifier=lambda s, p: s.pair("cp").friction.__setitem__(0, p.value[0]))` |
-| Joint damping / stiffness | `Parameter(..., modifier=lambda s, p: setattr(s.joint("j1"), "damping", p.value[0]))` |
+| Actuator P/D gains | `apply_pgain(spec, "act1", p.value[0])` |
+| Contact friction / solref | `spec.pair("cp").friction[0] = p.value[0]` |
+| Joint damping / stiffness | `spec.joint("j1").damping = p.value[0]` |
 
 **Measurement parameters** — real sensors aren't perfect. They may lag behind
 the simulation clock, have an unknown scale factor, or sit at a nonzero offset.
@@ -78,10 +78,13 @@ for link in ["link1", "link2", "link3"]:
 ```python
 from mujoco.sysid import Parameter
 
+def set_friction(spec, p):
+    spec.pair("foot_floor").friction[0] = p.value[0]
+
 params.add(Parameter(
     "floor_friction",
     nominal=1.0, min_value=0.1, max_value=3.0,
-    modifier=lambda s, p: s.pair("foot_floor").friction.__setitem__(0, p.value[0]),
+    modifier=set_friction,
 ))
 ```
 
@@ -100,12 +103,18 @@ from mujoco.sysid import Parameter, ParameterDict
 
 params = ParameterDict()
 
+def set_box_mass(spec, p):
+    spec.body("box").mass = p.value[0]
+
+def set_friction(spec, p):
+    spec.pair("contact").friction[0:2] = p.value
+
 params.add(Parameter(
   "box_mass",
   nominal=5.0,        # starting value
   min_value=1.0,
   max_value=10.0,
-  modifier=lambda spec, p: setattr(spec.body("box"), "mass", p.value[0]),
+  modifier=set_box_mass,
 ))
 
 params.add(Parameter(
@@ -114,7 +123,7 @@ params.add(Parameter(
   min_value=[0.0, 0.0],
   max_value=[3.0, 0.01],
   frozen=True,           # excluded from optimization
-  modifier=lambda spec, p: spec.pair("contact").friction.__setitem__(slice(0, 2), p.value),
+  modifier=set_friction,
 ))
 ```
 
@@ -590,13 +599,16 @@ spec = mujoco.MjSpec.from_file("robot.xml")
 model = spec.compile()
 
 # 2. Define parameters with modifier callbacks.
+def set_link1_mass(spec, p):
+    spec.body("link1").mass = p.value[0]
+
 params = ParameterDict()
 params.add(Parameter(
   "link1_mass",
   nominal=2.0,
   min_value=0.5,
   max_value=5.0,
-  modifier=lambda spec, p: setattr(spec.body("link1"), "mass", p.value[0]),
+  modifier=set_link1_mass,
 ))
 
 # 3. Package recorded data.
