@@ -1,6 +1,4 @@
-# Practical System Identification
-
-A toolbox for system identification built on top of MuJoCo.
+# System Identification Toolbox
 
 ## API Overview
 
@@ -486,7 +484,7 @@ default_report(
   opt_params=opt_params,
   opt_result=opt_result,
   residual_fn=residual_fn,
-  save_dir="results/exp01",
+  save_path="results/exp01",
 )
 ```
 
@@ -543,7 +541,6 @@ residual pipeline. Useful when writing a custom `modify_residual`:
 | `sysid_rollout(models, datas, control, initial_states)` | trajectory | Parallel MuJoCo rollout returning `SystemTrajectory` list |
 | `render_rollout(model, data, state, framerate)` | plotting | Render state trajectories to pixel frames |
 | `calculate_intervals(residuals, J, alpha)` | optimize | Confidence intervals from Jacobian at the solution |
-| `sweep_parameter(params, name, values, residual_fn)` | optimize | 1-D parameter sweep returning cost curve |
 | `plot_sensor_comparison(model, ...)` | plotting | Matplotlib overlay of predicted vs. measured sensors |
 | `SignalType` | timeseries | Enum: `MjSensor`, `CustomObs`, `MjStateQPos`, `MjStateQVel`, `MjStateAct`, `MjCtrl` |
 
@@ -571,8 +568,7 @@ BuildModelFn = Callable[[ParameterDict, MjSpec], MjModel]
 ## Skeleton Case Study
 
 Pseudocode showing the five-stage pipeline. Replace the data-loading step with
-your own hardware logs or simulation data. For a complete runnable example, see
-`case_studies/box/`.
+your own hardware logs or simulation data.
 
 ```python
 import mujoco
