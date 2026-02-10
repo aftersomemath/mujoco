@@ -143,6 +143,7 @@ def optimize(
     initial_params: parameter.ParameterDict,
     residual_fn: Callable[..., Any],
     optimizer: Literal["scipy", "mujoco", "scipy_parallel_fd"] = "mujoco",
+    verbose: bool = True,
     **optimizer_kwargs,
 ) -> tuple[parameter.ParameterDict, scipy_optimize.OptimizeResult]:
   """Run nonlinear least-squares optimization on the residual.
@@ -153,6 +154,7 @@ def optimize(
       returned by :func:`build_residual_fn`.
     optimizer: Backend — ``"mujoco"`` (default), ``"scipy"``, or
       ``"scipy_parallel_fd"`` (scipy with MuJoCo finite-difference Jacobian).
+    verbose: If True, log parameter comparison table after optimization.
     **optimizer_kwargs: Forwarded to the backend (e.g. ``max_iters``,
       ``verbose``, ``loss``).
 
@@ -186,6 +188,16 @@ def optimize(
   )
 
   opt_params.update_from_vector(opt_result.x)
+
+  if verbose:
+    logging.info(
+        "\n%s",
+        opt_params.compare_parameters(
+            initial_params.as_vector(),
+            opt_params.as_vector(),
+            measured_params=initial_params.as_nominal_vector(),
+        ),
+    )
 
   return opt_params, opt_result
 
