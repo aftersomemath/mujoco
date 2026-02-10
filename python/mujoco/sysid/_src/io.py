@@ -79,13 +79,3 @@ def save_results(
     model_sequences.spec.to_file(
         (experiment_results_folder / f"{model_sequences.name}.xml").as_posix()
     )
-
-  # Log nominal compared to initial.
-  x0 = initial_params.as_vector()
-  x_nominal = initial_params.as_nominal_vector()
-  logging.info(
-      "Initial Parameters\n%s",
-      initial_params.compare_parameters(
-          x0, opt_result.x, measured_params=x_nominal
-      ),
-  )
