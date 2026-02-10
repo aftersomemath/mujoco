@@ -16,7 +16,6 @@
 
 from mujoco.sysid._src import model_modifier
 from mujoco.sysid._src import parameter
-from mujoco.sysid._src import plotting
 from mujoco.sysid._src import signal_modifier
 from mujoco.sysid._src.io import save_results
 from mujoco.sysid._src.model_modifier import apply_body_inertia
@@ -57,4 +56,3 @@ from mujoco.sysid._src.trajectory import ModelSequences
 from mujoco.sysid._src.trajectory import sysid_rollout
 from mujoco.sysid._src.trajectory import SystemTrajectory
 from mujoco.sysid.report.defaults import default_report
-from mujoco.sysid.report.defaults import default_report_matplotlib
