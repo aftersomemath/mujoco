@@ -197,7 +197,7 @@ class ParameterDict:
   """An ordered collection of :class:`Parameter` objects.
 
   Behaves like a ``dict[str, Parameter]`` with convenience methods for
-  vectorised access (``as_vector`` / ``update_from_vector``), serialisation,
+  vectorized access (``as_vector`` / ``update_from_vector``), serialization,
   and tabular comparison of parameter estimates.
 
   Frozen parameters are silently skipped by vector/bounds methods so that the

@@ -462,7 +462,7 @@ class TimeSeries:
           str, tuple[SignalType, np.ndarray | list[int] | int]
       ],
   ) -> TimeSeries:
-    """Construct a TimeSeries, normalising index entries to ``np.ndarray``."""
+    """Construct a TimeSeries, normalizing index entries to ``np.ndarray``."""
     normalized: SignalMappingType = {}
     for key in signal_mapping:
       signal_type, indices = signal_mapping[key]

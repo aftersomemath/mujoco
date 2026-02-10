@@ -157,7 +157,7 @@ def optimize(
       ``verbose``, ``loss``).
 
   Returns:
-    ``(opt_params, opt_result)`` — the optimised ParameterDict and a
+    ``(opt_params, opt_result)`` — the optimized ParameterDict and a
     ``scipy.optimize.OptimizeResult`` with at least ``x``, ``jac``, ``grad``.
   """
   x0 = initial_params.as_vector()
