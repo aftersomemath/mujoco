@@ -91,7 +91,7 @@ def default_report(
     generate_video_from_trajectories(
         initial_params=initial_params,
         opt_params=opt_params,
-        build_model=build_model,
+        _build_model=build_model,
         trajectories=all_trajectories,
         model_spec=model_spec_to_render,
         output_filepath=video_all_path,
@@ -103,7 +103,7 @@ def default_report(
     generate_video_from_trajectories(
         initial_params=initial_params,
         opt_params=opt_params,
-        build_model=build_model,
+        _build_model=build_model,
         trajectories=all_trajectories,
         model_spec=model_spec_to_render,
         output_filepath=video_init_path,
@@ -116,7 +116,7 @@ def default_report(
     generate_video_from_trajectories(
         initial_params=initial_params,
         opt_params=opt_params,
-        build_model=build_model,
+        _build_model=build_model,
         trajectories=all_trajectories,
         model_spec=model_spec_to_render,
         output_filepath=video_opt_path,
