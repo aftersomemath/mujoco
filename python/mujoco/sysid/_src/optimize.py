@@ -44,7 +44,7 @@ def _scipy_least_squares(
 
   jac_arg: str | Callable[..., Any]
   if use_mujoco_jac:
-    # This is the default step sized for finite difference used in
+    # This is the default step size for finite difference used in
     # scipy's least_squares and mujoco's minimize finite difference
     # https://github.com/scipy/scipy/blob/91e18f3bd355477b
     # 8b7747ec82d70ac98ffd2422/scipy/optimize/_numdiff.py#L404
