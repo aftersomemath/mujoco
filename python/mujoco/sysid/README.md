@@ -65,26 +65,14 @@ def set_link1_mass(spec, p):
 
 params = sysid.ParameterDict()
 params.add(sysid.Parameter(
-    "link1_mass",
-    nominal=2.0,
-    min_value=0.5,
-    max_value=5.0,
-    modifier=set_link1_mass,
-))
+    "link1_mass", nominal=2.0, min_value=0.5, max_value=5.0,
+    modifier=set_link1_mass))
 
 # 2. Load and package measured data.
 control = sysid.TimeSeries.from_control_names(times, ctrl_array, model)
 sensordata = sysid.TimeSeries.from_names(times, sensor_array, model)
 initial_state = sysid.create_initial_state(model, qpos_0, qvel_0)
-
-ms = sysid.ModelSequences(
-    name="robot",
-    spec=spec,
-    sequence_name="traj_1",
-    initial_state=initial_state,
-    control=control,
-    sensordata=sensordata,
-)
+ms = sysid.ModelSequences("robot", spec, "traj_1", initial_state, control, sensordata)
 
 # 3. Build residual, optimize, save.
 residual_fn = sysid.build_residual_fn(models_sequences=[ms])
