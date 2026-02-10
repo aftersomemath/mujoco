@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Practical system identification for MuJoCo."""
+"""System identification toolbox."""
 
 from mujoco.sysid._src import model_modifier
 from mujoco.sysid._src import parameter
