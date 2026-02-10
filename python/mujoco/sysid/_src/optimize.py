@@ -197,7 +197,20 @@ def calculate_intervals(
     lambda_zero_thresh=1e-15,
     v_zero_thresh=1e-8,
 ):
-  """Calculate confidence intervals from the Jacobian at the optimum."""
+  """Calculate confidence intervals from the Jacobian at the optimum.
+
+  Args:
+    residuals_star: List of residual arrays at the optimum.
+    J: Jacobian matrix at the optimum, shape ``(n_residuals, n_params)``.
+    alpha: Significance level for the confidence intervals.
+    lambda_zero_thresh: Threshold below which eigenvalues are treated as zero.
+    v_zero_thresh: Threshold below which eigenvector elements are treated as
+      zero.
+
+  Returns:
+    ``(Sigma_X, intervals)`` — the parameter covariance matrix and the
+    half-width confidence intervals for each parameter.
+  """
   if J is None or J.size == 0:
     return np.empty((0, 0)), np.empty((0,))
 

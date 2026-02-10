@@ -445,7 +445,11 @@ class TimeSeries:
     return cls(times=times, data=data, signal_mapping=signal_mapping)
 
   def get_indices(self, obs_name: str) -> tuple[SignalType, np.ndarray]:
-    """Look up the signal type and column indices for a named observation."""
+    """Look up the signal type and column indices for a named observation.
+
+    Args:
+      obs_name: Name of the observation signal.
+    """
     assert self.signal_mapping is not None
     if obs_name not in self.signal_mapping:
       raise ValueError(
@@ -462,7 +466,14 @@ class TimeSeries:
           str, tuple[SignalType, np.ndarray | list[int] | int]
       ],
   ) -> TimeSeries:
-    """Construct a TimeSeries, normalizing index entries to ``np.ndarray``."""
+    """Construct a TimeSeries, normalizing index entries to ``np.ndarray``.
+
+    Args:
+      times: 1-D timestamp array.
+      data: Data array with first axis corresponding to time.
+      signal_mapping: Dict mapping signal names to ``(type, indices)`` tuples.
+        Index entries are coerced to ``np.ndarray``.
+    """
     normalized: SignalMappingType = {}
     for key in signal_mapping:
       signal_type, indices = signal_mapping[key]
@@ -560,7 +571,11 @@ class TimeSeries:
     )
 
   def save_to_csv(self, path: str | pathlib.Path) -> None:
-    """Save the time series data to a CSV file."""
+    """Save the time series data to a CSV file.
+
+    Args:
+      path: Path where the CSV file will be written.
+    """
     np.savetxt(
         path,
         np.concatenate([self.times[:, None], self.data], axis=1),

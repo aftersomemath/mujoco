@@ -332,7 +332,17 @@ def plot_candidate(
     log_diff: bool = True,
     bound_eps: float = 1e-3,
 ):
-  """Plot candidate parameter values and their diffs over iterations."""
+  """Plot candidate parameter values and their diffs over iterations.
+
+  Args:
+    candidate: Sequence of parameter vectors, one per iteration.
+    bounds: Optional ``(lower, upper)`` bound arrays.
+    param_names: Optional names for each parameter dimension.
+    figsize: Figure size ``(width, height)`` per subplot row.
+    dims_per_page: Number of parameter dimensions per page.
+    log_diff: If True, plot log10 of absolute diffs.
+    bound_eps: Tolerance for highlighting values near bounds.
+  """
   values = np.array(candidate)  # shape: (n_iter, n_dim)
   n_iter, n_dim = values.shape
   diffs = np.diff(values, axis=0)
@@ -496,7 +506,18 @@ def plot_candidate_heatmap(
     show_colorbar: bool = True,
     bound_eps: float = 1e-3,
 ):
-  """Plot a heatmap of candidate parameter values over iterations."""
+  """Plot a heatmap of candidate parameter values over iterations.
+
+  Args:
+    candidate: Sequence of parameter vectors, one per iteration.
+    param_names: Optional names for each parameter dimension.
+    bounds: Optional ``(lower, upper)`` bound arrays for normalization.
+    normalize: If True, normalize values to [0, 1] using bounds.
+    figsize: Figure size ``(width, height)``.
+    cmap: Matplotlib colormap name.
+    show_colorbar: Whether to display a colorbar.
+    bound_eps: Tolerance for marking values at bounds with an X.
+  """
   data = np.array(candidate).T  # shape: (n_dim, n_iter)
   n_dim = data.shape[0]
 
@@ -553,7 +574,15 @@ def parameter_confidence(
     cols: int = 5,
     gt_params: parameter.ParameterDict | None = None,
 ):
-  """Plot parameter estimates with confidence intervals."""
+  """Plot parameter estimates with confidence intervals.
+
+  Args:
+    all_exp_names: Experiment names, one per experiment.
+    all_params: ParameterDicts, one per experiment.
+    all_intervals: Confidence interval arrays, one per experiment.
+    cols: Number of subplot columns.
+    gt_params: Optional ground-truth parameters for reference lines.
+  """
   named_estimates = {}
   # Create an entry for every non-frozen parameter
   for params in all_params:

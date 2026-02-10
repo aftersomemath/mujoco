@@ -433,7 +433,14 @@ class ModelSequences:
 def timeseries2array(
     control_signal: timeseries.TimeSeries | Sequence[timeseries.TimeSeries],
 ) -> tuple[np.ndarray, np.ndarray]:
-  """Convert control TimeSeries to stacked arrays, dropping the last step."""
+  """Convert control TimeSeries to stacked arrays, dropping the last step.
+
+  Args:
+    control_signal: Control TimeSeries or sequence of TimeSeries.
+
+  Returns:
+    ``(control_array, control_times)`` with the last time step removed.
+  """
   if isinstance(control_signal, timeseries.TimeSeries):
     control = control_signal.data
     control_times = control_signal.times
@@ -457,7 +464,11 @@ def timeseries2array(
 def sequence2array(
     initial_states: np.ndarray | Sequence[np.ndarray],
 ) -> np.ndarray:
-  """Stack a sequence of initial-state vectors into a single array."""
+  """Stack a sequence of initial-state vectors into a single array.
+
+  Args:
+    initial_states: Single state array or sequence of state arrays.
+  """
   if isinstance(initial_states, np.ndarray):
     return initial_states
   return np.stack(initial_states, axis=0)
@@ -474,7 +485,19 @@ def arrays2traj(
     state_mapping: timeseries.SignalMappingType,
     ctrl_mapping: timeseries.SignalMappingType,
 ) -> Sequence[SystemTrajectory]:
-  """Convert raw rollout arrays into a list of SystemTrajectory objects."""
+  """Convert raw rollout arrays into a list of SystemTrajectory objects.
+
+  Args:
+    models: Single model or sequence of models (one per batch element).
+    initial_states: Initial state array(s).
+    control: Control array, shape ``(nbatch, nsteps, nu)``.
+    control_times: Control timestamps, shape ``(nbatch, nsteps)``.
+    state: State array, shape ``(nbatch, nsteps, nstate)``.
+    sensordata: Sensor data array, shape ``(nbatch, nsteps, nsensordata)``.
+    signal_mapping: Signal mapping for sensor data.
+    state_mapping: Signal mapping for state data.
+    ctrl_mapping: Signal mapping for control data.
+  """
   nbatch = state.shape[0]
   # TODO(kevin): When is np.tile/atleast_2d/etc necessary?
   # initial_states = np.tile(initial_states, (nbatch, 1))
