@@ -48,8 +48,7 @@ the low-level functions in `signal_modifier` (`apply_delay`, `apply_gain`,
 
 Multiple `ModelSequences` with different specs can be optimized jointly.
 For example, recordings of the same robot with and without a known payload
-can share inertial parameters, stacking residuals for a better-conditioned
-problem.
+can be combined for a better-conditioned problem.
 
 ## Example
 
@@ -70,12 +69,19 @@ params.add(sysid.Parameter(
     modifier=set_link1_mass,
 ))
 
-# 2. Package recorded data.
+# 2. Load and package measured data.
 control = sysid.TimeSeries.from_control_names(times, ctrl_array, model)
 sensordata = sysid.TimeSeries.from_names(times, sensor_array, model)
 initial_state = sysid.create_initial_state(model, qpos_0, qvel_0)
 
-ms = sysid.ModelSequences("robot", spec, "traj_1", initial_state, control, sensordata)
+ms = sysid.ModelSequences(
+    name="robot",
+    spec=spec,
+    sequence_name="traj_1",
+    initial_state=initial_state,
+    control=control,
+    sensordata=sensordata,
+)
 
 # 3. Build residual, optimize, save.
 residual_fn = sysid.build_residual_fn(models_sequences=[ms])
