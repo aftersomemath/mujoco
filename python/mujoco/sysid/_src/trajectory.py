@@ -476,10 +476,14 @@ def arrays2traj(
 ) -> Sequence[SystemTrajectory]:
   """Convert raw rollout arrays into a list of SystemTrajectory objects."""
   nbatch = state.shape[0]
-  # TODO(kevin): When is np.tile necessary?
+  # TODO(kevin): When is np.tile/atleast_2d/etc necessary?
   # initial_states = np.tile(initial_states, (nbatch, 1))
   # control = np.tile(control, (nbatch, 1, 1))
   # control_times = np.tile(control_times, (nbatch, 1))
+  initial_states = np.atleast_2d(initial_states)
+  if control.ndim == 2:
+    control = control[np.newaxis, :, :]
+  control_times = np.atleast_2d(control_times)
 
   if isinstance(models, mujoco.MjModel):
     models_list = [models] * nbatch
