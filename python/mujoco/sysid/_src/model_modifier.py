@@ -235,7 +235,14 @@ def pi_from_theta(theta: np.ndarray) -> np.ndarray:
   """Convert base parameters θ to inertial parameters π.
 
   Args:
-    theta: 10-D array of base parameters.
+    theta: 10-D array [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3] where:
+      alpha: Scale parameter (log of U[3,3])
+      [d1, d2, d3]: Log of diagonal elements
+      [s12, s23, s13]: Shear parameters from upper triangle
+      [t1, t2, t3]: Translation parameters from last column
+
+  Returns:
+    10-D array π = [m, hx, hy, hz, Ixx, Iyy, Izz, Ixy, Iyz, Ixz].
   """
   alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3 = theta
   exp_alpha = np.exp(alpha)
@@ -402,7 +409,7 @@ def apply_body_theta_inertia(
   Args:
     spec: MuJoCo model specification.
     body_name: Name of the body.
-    theta: 10-element base-parameter array.
+    theta: 10-element array [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3].
   """
   if theta.size != 10:
     raise ValueError(f"theta must be a 10-element array, got {theta.size}.")
