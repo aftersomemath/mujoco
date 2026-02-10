@@ -27,7 +27,7 @@ callback, for example:
 | Body mass + center of mass | `body_inertia_param(..., InertiaType.MassIpos)` |
 | Full body inertia (10-D) | `body_inertia_param(..., InertiaType.Pseudo)` |
 | Actuator P/D gains | `apply_pgain(spec, "act1", p.value[0])` |
-| Contact friction | `spec.pair("cp").friction[0] = p.value[0]` |
+| Contact sliding friction | `spec.pair("cp").friction[0] = p.value[0]` |
 | Joint damping | `spec.joint("j1").damping = p.value[0]` |
 
 Full inertia uses the pseudo-inertia Cholesky parameterization
