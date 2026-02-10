@@ -18,7 +18,8 @@ Define Parameters → Package Data → Build Residual → Optimize → Report
 
 ## What Can You Identify?
 
-**Physics parameters** can be anything settable on `MjSpec` via a modifier callback:
+**Physics parameters** can be anything settable on `MjSpec` via a modifier
+callback, for example:
 
 | Target | Approach |
 |---|---|
