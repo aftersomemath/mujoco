@@ -302,12 +302,12 @@ class SystemTrajectory:
         height=height,
     )
 
-def _map_states(from_array, to_array, from_names, to_mapping):
+def _map_states(from_array, to_array, from_names, to_mapping, map_offset):
   i = 0
   for name in from_names:
     _, indices = to_mapping[name]
     width = indices.shape[0]
-    to_array[indices] = from_array[i:i+width]
+    to_array[indices - map_offset] = from_array[i:i+width]
     i += width
   return to_array
 
@@ -359,11 +359,13 @@ def create_initial_state(
       or act_names is not None):
     qpos_map, qvel_map, act_map, _ = timeseries.TimeSeries.compute_all_state_mappings(model)
   if qpos_names is not None:
-    qpos = _map_states(qpos, np.copy(data.qpos), qpos_names, qpos_map)
+    qpos = _map_states(qpos, np.copy(data.qpos), qpos_names, qpos_map, 0)
   if qvel_names is not None:
-    qvel = _map_states(qvel, np.copy(data.qvel), qvel_names, qvel_map)
+    indices_offset = data.qpos.shape[0]
+    qvel = _map_states(qvel, np.copy(data.qvel), qvel_names, qvel_map, indices_offset)
   if act_names is not None:
-    act = _map_states(act, np.copy(data.act), act_names, act_map)
+    indices_offset = data.qpos.shape[0] + data.qvel.shape[0]
+    act = _map_states(act, np.copy(data.act), act_names, act_map, indices_offset)
 
   if qpos.shape[0] != model.nq:
     raise ValueError(
