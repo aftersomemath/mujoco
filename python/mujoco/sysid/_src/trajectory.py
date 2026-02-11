@@ -341,7 +341,7 @@ def create_initial_state(
 
   if qpos_names is not None and len(qpos_names) != qpos.shape[0]:
     raise ValueError(
-      f"Expected qpos to have shape {len(q_names)}, got {qpos.shape[0]}"
+      f"Expected qpos to have shape {len(qpos_names)}, got {qpos.shape[0]}"
     )
   if qvel is None and qvel_names is not None:
     raise ValueError("Expected qvel to not be None when qvel_names is not None")
@@ -361,7 +361,7 @@ def create_initial_state(
   if qpos_names is not None:
     qpos = _map_states(qpos, np.copy(data.qpos), qpos_names, qpos_map)
   if qvel_names is not None:
-    qvel = _map_states(qvel, np.copy(data.qvel), qpos_names, qvel_map)
+    qvel = _map_states(qvel, np.copy(data.qvel), qvel_names, qvel_map)
   if act_names is not None:
     act = _map_states(act, np.copy(data.act), act_names, act_map)
 
