@@ -31,7 +31,6 @@ from mujoco.sysid._src.optimize import optimize as optimize
 from mujoco.sysid._src.parameter import InertiaType as InertiaType
 from mujoco.sysid._src.parameter import Parameter as Parameter
 from mujoco.sysid._src.parameter import ParameterDict as ParameterDict
-from mujoco.sysid._src.plotting import plot_sensor_comparison as plot_sensor_comparison
 from mujoco.sysid._src.plotting import render_rollout as render_rollout
 from mujoco.sysid._src.residual import build_residual_fn as build_residual_fn
 from mujoco.sysid._src.residual import BuildModelFn as BuildModelFn
