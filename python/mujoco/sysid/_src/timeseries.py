@@ -220,22 +220,26 @@ class TimeSeries:
     nq = model.nq
     nv = model.nv
 
-    # Bodies
+    # Bodies with free joints, named by body rather than joint.
     for body_id in range(model.nbody):
       b = model.body(body_id)
       body_name = b.name
-      start_index = model.body_dofadr[body_id]
+      dof_adr = model.body_dofadr[body_id]
 
-      if start_index >= 0 and b.dofnum[0] == 6:
-        qpos_indices = np.arange(start_index, start_index + 7)
+      if dof_adr >= 0 and b.dofnum[0] == 6:
+        # Use the body's first joint qposadr for qpos. Free joints have
+        # 7 qpos elements but only 6 dofs, so dofadr and qposadr diverge
+        # for subsequent entries.
+        first_jnt = model.body_jntadr[body_id]
+        qpos_adr = model.jnt_qposadr[first_jnt]
+        qpos_indices = np.arange(qpos_adr, qpos_adr + 7)
         qpos_map[f"{body_name}_qpos"] = (SignalType.MjStateQPos, qpos_indices)
-        qvel_indices = np.arange(start_index + nq, start_index + nq + 6)
+        qvel_indices = np.arange(dof_adr + nq, dof_adr + nq + 6)
         qvel_map[f"{body_name}_qvel"] = (SignalType.MjStateQVel, qvel_indices)
 
-    # Joints
+    # Joints, excluding free joints which are handled above.
     for jnt_id in range(model.njnt):
       jnt_name = model.joint(jnt_id).name
-      start_index = model.jnt_qposadr[jnt_id]
       jnt_type = model.jnt_type[jnt_id]
 
       qpos_width = 1
@@ -246,9 +250,11 @@ class TimeSeries:
       elif jnt_type == mujoco.mjtJoint.mjJNT_FREE:
         continue
 
-      qpos_indices = np.arange(start_index, start_index + qpos_width)
+      qpos_adr = model.jnt_qposadr[jnt_id]
+      qpos_indices = np.arange(qpos_adr, qpos_adr + qpos_width)
       qpos_map[f"{jnt_name}_qpos"] = (SignalType.MjStateQPos, qpos_indices)
-      qvel_indices = np.arange(start_index + nq, start_index + nq + qvel_width)
+      dof_adr = model.jnt_dofadr[jnt_id]
+      qvel_indices = np.arange(dof_adr + nq, dof_adr + nq + qvel_width)
       qvel_map[f"{jnt_name}_qvel"] = (SignalType.MjStateQVel, qvel_indices)
 
     # Actuators
