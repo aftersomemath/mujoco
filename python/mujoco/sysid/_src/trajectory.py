@@ -302,12 +302,22 @@ class SystemTrajectory:
         height=height,
     )
 
+def _map_states(from_array, to_array, from_names, to_mapping):
+  i = 0
+  for name in from_names:
+    _, indices = to_mapping[name]
+    width = indices.shape[0]
+    to_array[indices] = from_array[i:i+width]
+    i += width
+  return to_array
 
 def create_initial_state(
     model: mujoco.MjModel,
     qpos: np.ndarray,
     qvel: np.ndarray | None = None,
     act: np.ndarray | None = None,
+    q_names: Sequence[str] | None = None,
+    act_names: Sequence[str] | None = None,
 ) -> np.ndarray:
   """Build a ``mjSTATE_FULLPHYSICS`` initial-state vector from components.
 
@@ -316,14 +326,40 @@ def create_initial_state(
     qpos: Joint positions, shape ``(nq,)``.
     qvel: Joint velocities, shape ``(nv,)``.  Defaults to zero.
     act: Actuator activations, shape ``(na,)``.  Defaults to zero.
+    q_names: State names to map elements of qpos/qvel to specific
+        MuJoCo states. If None, assumes qpos/qvel are in MuJoCo's order.
+    act_names: Actuator names to map elements of act to specific MuJoCo
+      actuators. If None, assumes act is in MuJoCo's order.
 
   Returns:
     Flat state vector suitable for ``mujoco.rollout``.
   """
   data = mujoco.MjData(model)
-  initial_state = np.empty((
-      mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS.value),
-  ))
+
+  if q_names is not None and len(q_names) != qpos.shape[0]:
+    raise ValueError(
+      f"Expected qpos to have shape {len(q_names)}, got {qpos.shape[0]}"
+    )
+  if q_names is not None and qvel is not None and len(q_names) != qvel.shape[0]:
+      raise ValueError(
+        f"Expected qvel to have shape {len(q_names)}, got {qvel.shape[0]}"
+      )
+  if act_names is not None and len(act_names) != act.shape[0]:
+    raise ValueError(
+      f"Expected act to have shape {len(act_names)}, got {act.shape[0]}"
+    )
+
+  if q_names or act_names is not None:
+    qpos_map, qvel_map, act_map, _ = timeseries.TimeSeries.compute_all_state_mappings(model)
+
+  if q_names is not None:
+    qpos = _map_states(qpos, np.copy(data.qpos), q_names, qpos_map)
+    if qvel is not None:
+      qvel = _map_states(qpos, np.copy(data.qvel), q_names, qvel_map)
+
+  if act_names is not None:
+    act = _map_states(act, np.copy(data.act), act_names, act_map)
+
   if qpos.shape[0] != model.nq:
     raise ValueError(
         f"Expected qpos to have shape {model.nq}, got {qpos.shape[0]}."
@@ -341,6 +377,10 @@ def create_initial_state(
           f"Expected act to have shape {model.na}, got {act.shape[0]}."
       )
     data.act[:] = act
+
+  initial_state = np.empty((
+      mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS.value),
+  ))
   mujoco.mj_getState(
       model, data, initial_state, mujoco.mjtState.mjSTATE_FULLPHYSICS.value
   )
