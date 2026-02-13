@@ -78,7 +78,7 @@ def apply_param_modifiers(
   times.append(time.perf_counter())
   model = spec.compile()
   times.append(time.perf_counter())
-  print('modifiers', np.diff(times))
+  # print('modifiers', np.diff(times))
 
   return model
 
@@ -92,7 +92,7 @@ def _infer_inertial(spec: mujoco.MjSpec, body_name: str) -> mujoco.MjsBody:
   t1 = time.perf_counter()
   model = spec.compile()
   t2 = time.perf_counter()
-  print('inertial', t2-t1)
+  # print('inertial', t2-t1)
   body.explicitinertial = True
   body.fullinertia = np.full((6, 1), np.nan)
   body.mass = model.body(body_name).mass[0]
