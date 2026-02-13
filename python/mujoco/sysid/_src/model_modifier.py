@@ -67,18 +67,32 @@ def apply_param_modifiers_spec(
   return spec
 
 
+import time
 def apply_param_modifiers(
     params: ParameterDict, spec: mujoco.MjSpec
 ) -> mujoco.MjModel:
-  return apply_param_modifiers_spec(params, spec).compile()
+  
+  times = []
+  times.append(time.perf_counter())
+  spec = apply_param_modifiers_spec(params, spec)
+  times.append(time.perf_counter())
+  model = spec.compile()
+  times.append(time.perf_counter())
+  print('modifiers', np.diff(times))
+
+  return model
 
 
+import time
 def _infer_inertial(spec: mujoco.MjSpec, body_name: str) -> mujoco.MjsBody:
   """Override spec inertia using inferred inertia from compiled model."""
   body = _get_obj_or_raise(spec, "body", body_name)
   assert isinstance(body, mujoco.MjsBody)
   spec.compiler.inertiafromgeom = 2
+  t1 = time.perf_counter()
   model = spec.compile()
+  t2 = time.perf_counter()
+  print('inertial', t2-t1)
   body.explicitinertial = True
   body.fullinertia = np.full((6, 1), np.nan)
   body.mass = model.body(body_name).mass[0]

@@ -155,6 +155,7 @@ def construct_ts_from_defaults(
 
 
 # Lowest level residual function, works on one model
+import time
 def model_residual(
     x: np.ndarray,
     params: parameter.ParameterDict,
@@ -191,6 +192,9 @@ def model_residual(
   Returns:
     A 3-tuple ``(residuals, pred_sensordatas, measured_sensordatas)``.
   """
+  times = []
+  times.append(time.perf_counter())
+
   # Convert single trajectory to list for consistent handling.
   if isinstance(traj_measured, SystemTrajectory):
     traj_measured = [traj_measured]
@@ -204,18 +208,28 @@ def model_residual(
     x_reshaped = x
   else:
     x_reshaped = x.reshape(-1, 1)
+  times.append(time.perf_counter())
 
   # Process each finite difference column.
   models = []
   models_x = []
   model_0 = None
+  time_update = 0.0
+  time_build = 0.0
   for i in range(n_fd):
+    times2 = []
+    times2.append(time.perf_counter())
     params.update_from_vector(x_reshaped[:, i])
+    times2.append(time.perf_counter())
     model = build_model(params)
+    times2.append(time.perf_counter())
+    time_update += times2[1] - times2[0]
+    time_build += times2[2] - times2[1]
     if not model_0:
       model_0 = model
     models_x.extend([x_reshaped[:, i]] * n_chunks)
     models.extend([model] * n_chunks)
+  times.append(time.perf_counter())
 
   assert model_0 is not None
   qpos_map, qvel_map, act_map, rollout_ctrl_map = (
@@ -225,9 +239,11 @@ def model_residual(
   rollout_signal_mapping = timeseries.TimeSeries.compute_all_sensor_mapping(
       model_0
   )
+  times.append(time.perf_counter())
 
   # Create data objects for parallel computation.
   datas = [mujoco.MjData(models[0]) for _ in range(n_threads)]
+  times.append(time.perf_counter())
 
   # Interpolate control signal.
   if resample_true:
@@ -237,6 +253,7 @@ def model_residual(
     ]
   else:
     control_chunks = [traj.control for traj in traj_measured]
+  times.append(time.perf_counter())
 
   # Rollout trajectories in parallel.
   if custom_rollout is None:
@@ -263,6 +280,7 @@ def model_residual(
         rollout_state_mapping=rollout_state_mapping,
         ctrl_mapping=rollout_ctrl_map,
     )
+  times.append(time.perf_counter())
 
   # Compute residuals for each trajectory chunk.
   all_residuals = []
@@ -349,12 +367,28 @@ def model_residual(
     all_residuals.append(res)
     pred_sensordatas.append(pred_sensordata)
     measured_sensordatas.append(measured_sensordata)
+  times.append(time.perf_counter())
 
   res_array = np.stack(all_residuals, axis=0)
   if initial_ndim == 1:
     res_array = res_array.ravel()
   else:
     res_array = res_array.reshape(res_array.shape[0], -1)
+  times.append(time.perf_counter())
+
+  td = np.diff(times) * 1000
+  print('residual times', 
+        'reshape', f'{td[0]:3.2f}',
+        'update params', f'{time_update*1000:3.2f}',
+        'build_model', f'{time_build*1000:3.2f}',
+        # 'build_model_all', f'{td[1]:3.2f}',
+        'state_mappings', f'{td[2]:0.2f}',
+        'mjData', f'{td[3]:0.2f}',
+        'ctrl interp', f'{td[4]:0.2f}',
+        'rollout', f'{td[5]:0.2f}',
+        'residuals', f'{td[6]:0.2f}',
+        'reshape', f'{td[7]:0.2f}',
+  )
 
   return res_array.T, pred_sensordatas, measured_sensordatas
 
