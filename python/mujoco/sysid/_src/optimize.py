@@ -18,7 +18,6 @@
 from collections.abc import Callable
 from typing import Any, Literal
 
-from absl import logging
 from mujoco import minimize as mujoco_minimize
 from mujoco.sysid._src import parameter
 import numpy as np
@@ -168,9 +167,8 @@ def optimize(
 
   # Check if there are any parameters to optimize.
   if not opt_params or opt_params.size == 0:
-    logging.warning(
-        "The ParameterDict is empty or contains only frozen Parameters. "
-        "Please declare all Parameters that need to be optimized."
+    print("Warning: The ParameterDict is empty or contains only frozen "
+          "Parameters. Returning original values."
     )
     return opt_params, scipy_optimize.OptimizeResult(
         x=x0,
@@ -190,7 +188,7 @@ def optimize(
   opt_params.update_from_vector(opt_result.x)
 
   if verbose:
-    logging.info(
+    print(
         "\n%s",
         opt_params.compare_parameters(
             initial_params.as_vector(),

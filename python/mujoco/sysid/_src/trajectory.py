@@ -21,7 +21,6 @@ from collections.abc import Sequence
 import dataclasses
 import pathlib
 
-from absl import logging
 import mujoco
 import mujoco.rollout as mj_rollout
 from mujoco.sysid._src import timeseries
@@ -183,10 +182,9 @@ class SystemTrajectory:
             f" match model sensor dimension {self.model.nsensordata}"
         )
       else:
-        logging.warning(
-            "Sensor data dimension %d does not match model sensor dimension %d",
-            self.sensordata.data.shape[1],
-            self.model.nsensordata,
+        print(
+            f"Warning: Sensor data dimension {self.sensordata.data.shape[1]} "
+            f"does not match model sensor dimension {self.model.nsensordata}"
         )
 
     if self.control.data.shape[1] != self.model.nu:

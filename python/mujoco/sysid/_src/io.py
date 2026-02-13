@@ -20,7 +20,6 @@ import os
 import pathlib
 import pickle
 
-from absl import logging
 from mujoco.sysid._src import parameter
 from mujoco.sysid._src.optimize import calculate_intervals
 from mujoco.sysid._src.trajectory import ModelSequences
@@ -48,9 +47,6 @@ def save_results(
   experiment_results_folder = pathlib.Path(experiment_results_folder)
   if not experiment_results_folder.exists():
     experiment_results_folder.mkdir(parents=True, exist_ok=True)
-  logging.info(
-      "Experiment results will be saved to %s", experiment_results_folder
-  )
 
   initial_params.save_to_disk(experiment_results_folder / "params_x_0.yaml")
   opt_params.save_to_disk(experiment_results_folder / "params_x_hat.yaml")
