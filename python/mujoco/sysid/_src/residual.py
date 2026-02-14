@@ -250,6 +250,7 @@ def model_residual(
         ctrl_mapping=rollout_ctrl_map,
     )
   else:
+    # TODO(levi): is there a better way than deepcopy?
     param_dicts = [copy.deepcopy(params) for i in range(x_reshaped.shape[1])]
     for i in range(x_reshaped.shape[1]):
       param_dicts[i].update_from_vector(x_reshaped[:, i])
@@ -338,7 +339,10 @@ def model_residual(
       )
       res = signal_modifier.normalize_residual(res, measured_sensordata.data)
 
-    if pred_sensordata.signal_mapping != measured_sensordata.signal_mapping:
+    if not timeseries.compare_signal_maps(
+      pred_sensordata.signal_mapping,
+      measured_sensordata.signal_mapping
+    ):
       raise ValueError(
           "The observation mapping between the measured data and predicted"
           " rollout data is not the same. You have not modified the observation"

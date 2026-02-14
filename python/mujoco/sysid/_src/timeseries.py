@@ -43,6 +43,16 @@ InterpolationMethod = Literal[
     "linear", "cubic", "quadratic", "quintic", "zero_order_hold", "zoh"
 ]
 
+def compare_signal_maps(map1, map2):
+  if not map1.keys() == map2.keys():
+    return False
+  result = True
+  for k in map1.keys():
+    v1 = map1[k]
+    v2 = map2[k]
+    result &= v1[0] == v2[0]
+    result &= (v1[1] == v2[1]).all()
+  return result
 
 def _resolve_signals(
     model: mujoco.MjModel,
