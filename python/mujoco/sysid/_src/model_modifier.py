@@ -455,7 +455,7 @@ def apply_body_inertia(spec: mujoco.MjSpec, name: str, param: Parameter):
 
   if param.inertia_type == InertiaType.Mass:
     apply_body_mass_ipos(
-        spec, name, mass=param.value, rot_inertia_scale=param.scale_rot_inertia
+        spec, name, mass=param.value[0], rot_inertia_scale=param.scale_rot_inertia
     )
 
   elif param.inertia_type == InertiaType.MassIpos:
