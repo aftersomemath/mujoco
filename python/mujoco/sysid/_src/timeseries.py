@@ -44,6 +44,9 @@ InterpolationMethod = Literal[
 ]
 
 def compare_signal_maps(map1, map2):
+  if map1 is None:
+    return map2 is None
+   
   if not map1.keys() == map2.keys():
     return False
   result = True
