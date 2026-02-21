@@ -76,9 +76,9 @@ class Parameter:
       modifier: ModifierFn | None = None,
   ):
     self.name = name
-    self.nominal = np.atleast_1d(nominal)
-    self.min_value = np.atleast_1d(min_value)
-    self.max_value = np.atleast_1d(max_value)
+    self.nominal = np.atleast_1d(nominal).astype(np.float64)
+    self.min_value = np.atleast_1d(min_value).astype(np.float64)
+    self.max_value = np.atleast_1d(max_value).astype(np.float64)
     self.value = self.nominal.copy()
     self.frozen = frozen
     self.modifier = modifier
@@ -279,16 +279,17 @@ class ParameterDict:
     ]
     return np.concatenate(vectors) if vectors else np.array([])
 
-  def update_from_vector(self, vector: np.ndarray) -> None:
+  def update_from_vector(self, vector: np.ndarray, include_frozen=False) -> None:
     """Update all non-frozen parameters from a flat vector.
 
     Args:
       vector: Flat array whose length equals the total size of non-frozen
         parameters.
+      include_frozen: Whether the vector includes the frozen parameters
     """
     start = 0
     for param in self.parameters.values():
-      if not param.frozen:
+      if not param.frozen or include_frozen:
         size = param.size
         param.update_from_vector(vector[start : start + size])
         start += size
