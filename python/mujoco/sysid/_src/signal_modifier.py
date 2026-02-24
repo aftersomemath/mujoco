@@ -150,9 +150,10 @@ def apply_time_window(
 
 def apply_delayed_ts_window(
     ts: timeseries.TimeSeries,
-    ts_delayed: timeseries.TimeSeries,
+    ts_sampled: timeseries.TimeSeries,
     min_delay: float,
     max_delay: float,
+    ts_delayed: bool = True,
 ) -> timeseries.TimeSeries:
   """Window a timeseries to fit within the bounds of a delayed series.
 
@@ -161,9 +162,10 @@ def apply_delayed_ts_window(
 
   Args:
     ts: The timeseries to window.
-    ts_delayed: The timeseries to use as the bounds.
+    ts_sampled: The timeseries to use as the bounds.
     min_delay: The minimum delay. May be negative.
     max_delay: The maximum delay.
+    predicted_data: If true, ts assumed to be delayed version of ts_sampled
 
   Returns:
     A new timeseries with the timestamps windowed.
@@ -173,9 +175,15 @@ def apply_delayed_ts_window(
         "min_delay must be less than or equal to max_delay, "
         f"received {min_delay} and {max_delay}"
     )
-  return apply_time_window(
-      ts, ts_delayed.times[0] - min_delay, ts_delayed.times[-1] - max_delay
-  )
+
+  if ts_delayed:
+    return apply_time_window(
+        ts, ts_sampled.times[0] + max_delay, ts_sampled.times[-1] + min_delay
+    )
+  else:
+    return apply_time_window(
+        ts, ts_sampled.times[0] - min_delay, ts_sampled.times[-1] - max_delay
+    )
 
 
 def _build_per_column_delays(
