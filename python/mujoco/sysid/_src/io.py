@@ -57,7 +57,7 @@ def save_results(
     pickle.dump(opt_result, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
   # TODO(b/0): these intervals should be part of the params object.
-  residuals_star, _, _ = residual_fn(
+  residuals_star, _, _, _ = residual_fn(
       opt_result.x, opt_params, return_pred_all=True
   )
   covariance, intervals = calculate_intervals(residuals_star, opt_result.jac)

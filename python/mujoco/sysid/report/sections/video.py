@@ -26,6 +26,7 @@ from mujoco.sysid._src import parameter
 from mujoco.sysid._src.plotting import render_rollout
 from mujoco.sysid._src.trajectory import SystemTrajectory
 from mujoco.sysid.report.sections.base import ReportSection
+import numpy as np
 
 
 def spec_apply(spec, attrs, values):
@@ -57,6 +58,7 @@ def generate_video_from_trajectories(
     fovy: float = 60,
     camera: str | int = -1,
     fps: int = 60,
+    residual_fn = None,
 ) -> pathlib.Path:
   """Render trajectories and concatenate into a single video.
 
@@ -89,57 +91,72 @@ def generate_video_from_trajectories(
     # Build models for this trajectory
     models = []
     datas = []
+    states = []
 
     nominal_params = initial_params.copy()
     nominal_params.reset()
 
+
     # initial
     if render_initial:
       initial_spec = model_spec.copy()
-      initial_spec = model_modifier.apply_param_modifiers_spec(
-          initial_params, initial_spec
-      )
       spec_apply(initial_spec, ["rgba"], [[1, 0, 0, 0.5]])
+      initial_model = _build_model(initial_params, initial_spec)
       initial_model = initial_spec.compile()
       initial_data = mujoco.MjData(initial_model)
       models.append(initial_model)
       datas.append(initial_data)
 
+      if residual_fn:
+
+        res, pred0s, _, state = residual_fn(
+            initial_params.as_vector(), initial_params, return_pred_all=True
+        )
+        states.append(state[0][0])
+
     # nominal
     if render_nominal:
       nominal_spec = model_spec.copy()
-      nominal_spec = model_modifier.apply_param_modifiers_spec(
-          nominal_params, nominal_spec
-      )
       spec_apply(nominal_spec, ["rgba"], [[0, 1, 0, 0.4]])
-      nominal_model = nominal_spec.compile()
+      nominal_model = _build_model(nominal_params, nominal_spec)
       nominal_data = mujoco.MjData(nominal_model)
       models.append(nominal_model)
       datas.append(nominal_data)
 
+      if residual_fn:
+
+        res, pred0s, _, state = residual_fn(
+            nominal_params.as_vector(), nominal_params, return_pred_all=True
+        )
+        states.append(state[0][0])
+
     # pred
     if render_opt:
       pred_spec = model_spec.copy()
-      pred_spec = model_modifier.apply_param_modifiers_spec(
-          opt_params, pred_spec
-      )
       spec_apply(pred_spec, ["rgba"], [[0, 0, 1, 1.0]])
-      pred_model = pred_spec.compile()
+      pred_model = _build_model(opt_params, pred_spec)
       pred_data = mujoco.MjData(pred_model)
       models.append(pred_model)
       datas.append(pred_data)
+      if residual_fn:
+
+        res, pred0s, _, state = residual_fn(
+            opt_params.as_vector(), opt_params, return_pred_all=True
+        )
+        states.append(state[0][0])
 
     control_ts = traj.control.resample(target_dt=models[0].opt.timestep)
-    state, _ = mujoco.rollout.rollout(
-        models, datas, traj.initial_state, control_ts.data
-    )
+    states = np.array(states)
+    # state, _ = mujoco.rollout.rollout(
+    #     models, datas, traj.initial_state, control_ts.data
+    # )
     models[0].vis.global_.fovy = fovy
     models[0].vis.global_.offwidth = width
     models[0].vis.global_.offheight = height
     frames = render_rollout(
         models,
         datas[0],
-        state,
+        states,
         framerate=fps,
         height=height,
         width=width,

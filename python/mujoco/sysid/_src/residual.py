@@ -189,7 +189,7 @@ def model_residual(
     enabled_observations: Subset of ``(name, SignalType)`` pairs to include.
 
   Returns:
-    A 3-tuple ``(residuals, pred_sensordatas, measured_sensordatas)``.
+    A 4-tuple ``(residuals, pred_sensordatas, measured_sensordatas, pred_states)``.
   """
   # Convert single trajectory to list for consistent handling.
   if isinstance(traj_measured, SystemTrajectory):
@@ -269,12 +269,14 @@ def model_residual(
   all_residuals = []
   pred_sensordatas = []
   measured_sensordatas = []
+  pred_states = []
 
   for i in range(len(models)):
     model = models[i]
     pred_traj = pred_trajectories[i]
     assert pred_traj.state is not None
     pred_state = pred_traj.state.data
+    pred_states.append(pred_state)
 
     rollout_state_ts = timeseries.TimeSeries(
         times=pred_state[:, 0],
@@ -360,7 +362,7 @@ def model_residual(
   else:
     res_array = res_array.reshape(res_array.shape[0], -1)
 
-  return res_array.T, pred_sensordatas, measured_sensordatas
+  return res_array.T, pred_sensordatas, measured_sensordatas, pred_states
 
 
 def build_residual_fn(**captured_kwargs):
@@ -428,6 +430,7 @@ def residual(
   residuals = []
   preds = []
   records = []
+  states = []
   for model_sequences in models_sequences:
     for measured_rollout in model_sequences.measured_rollout:
       res = model_residual(
@@ -449,5 +452,6 @@ def residual(
         residuals.append(res[0])
         preds.append(res[1])
         records.append(res[2])
+        states.append(res[3])
 
-  return residuals, preds, records
+  return residuals, preds, records, states

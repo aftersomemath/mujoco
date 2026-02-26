@@ -201,7 +201,6 @@ class OptimizationTrace(ReportSection):
       fig = plt_subplots.make_subplots(
           rows=dims_in_page,
           cols=2,
-          shared_xaxes=True,
           subplot_titles=[
               title
               for name in page_param_names
@@ -350,6 +349,7 @@ class OptimizationTrace(ReportSection):
           gridwidth=1,
           gridcolor="rgba(211, 211, 211, 0.7)",
           zeroline=False,
+          matches="x",
       )
       fig.update_yaxes(
           showgrid=True,

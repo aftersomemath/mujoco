@@ -53,6 +53,8 @@ def default_report(
   from mujoco.sysid.report.sections.video import generate_video_from_trajectories
   from mujoco.sysid.report.sections.video import VideoPlayer
 
+  if save_path:
+    save_path = pathlib.Path(save_path)
   ####################################
   # Build report
   # Sections:
@@ -92,6 +94,7 @@ def default_report(
         trajectories=all_trajectories,
         model_spec=model_spec_to_render,
         output_filepath=video_all_path,
+        residual_fn=residual_fn,
         fps=60,
     )
 
@@ -106,6 +109,7 @@ def default_report(
         output_filepath=video_init_path,
         render_opt=False,
         fps=60,
+        residual_fn=residual_fn,
     )
 
     # Video 3: Optimized + Nominal (no initial)
@@ -119,6 +123,7 @@ def default_report(
         output_filepath=video_opt_path,
         render_initial=False,
         fps=60,
+        residual_fn=residual_fn,
     )
 
     video_all_section = VideoPlayer(
@@ -131,13 +136,13 @@ def default_report(
         height=None,
         caption=(
             "<span class='color-initial'>Initial</span>, <span"
-            " class='color-nominal'>Nominal</span>, <span"
+            " class='color-nominal'>Measured</span>, <span"
             " class='color-optimized'>Optimized</span>"
         ),
     )
 
     video_init_section = VideoPlayer(
-        title="Initial vs Nominal",
+        title="Initial vs Measured",
         video_filepath=video_init_path,
         anchor="visual_run_init",
         autoplay=True,
@@ -146,12 +151,12 @@ def default_report(
         height=None,
         caption=(
             "<span class='color-initial'>Initial</span>, <span"
-            " class='color-nominal'>Nominal</span>"
+            " class='color-nominal'>Measured</span>"
         ),
     )
 
     video_opt_section = VideoPlayer(
-        title="Optimized vs Nominal",
+        title="Optimized vs Measured",
         video_filepath=video_opt_path,
         anchor="visual_run_opt",
         autoplay=True,
@@ -159,7 +164,7 @@ def default_report(
         width="100%",
         height=None,
         caption=(
-            "<span class='color-nominal'>Nominal</span>, <span"
+            "<span class='color-nominal'>Measured</span>, <span"
             " class='color-optimized'>Optimized</span>"
         ),
     )
@@ -171,7 +176,7 @@ def default_report(
             anchor="visual_comparison",
             description=(
                 "Visual comparison of the system identification results. The"
-                " nominal model is shown in green, the initial model in red,"
+                " measured model is shown in green, the initial model in red,"
                 " and the optimized model in blue."
             ),
         )
@@ -194,11 +199,11 @@ def default_report(
       for model_sequences in models_sequences
       for sequence in model_sequences.sequence_name
   ]
-  _, pred0s, _ = residual_fn(
+  _, pred0s, _, _ = residual_fn(
       initial_params.as_vector(), initial_params, return_pred_all=True
   )
 
-  residuals_star, preds_star, records_star = residual_fn(
+  residuals_star, preds_star, records_star, _ = residual_fn(
       opt_params.as_vector(), opt_params, return_pred_all=True
   )
 
@@ -232,7 +237,7 @@ def default_report(
   for name, pred, record, pred0 in zip(
       names, preds_star, records_star, pred0s, strict=True
   ):
-    obs_dict = {"initial": pred0[0], "nominal": record[0], "fitted": pred[0]}
+    obs_dict = {"initial": pred0[0], "measured": record[0], "fitted": pred[0]}
     observation_reports.append(
         SignalReport(
             f"Sequence: {name}",

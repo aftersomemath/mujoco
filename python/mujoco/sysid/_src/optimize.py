@@ -178,7 +178,7 @@ def optimize(
     )
 
   def optimized_residual_fn(x):
-    residuals, _, _ = residual_fn(x, opt_params)
+    residuals, _, _, _ = residual_fn(x, opt_params)
     return np.concatenate(residuals)
 
   opt_result = _dispatch_optimizer(

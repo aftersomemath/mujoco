@@ -123,7 +123,7 @@ class SignalReport(ReportSection):
       }
 
     if not mapping:
-      return
+      return None
 
     signal_names = []
     for name in mapping:
@@ -136,17 +136,12 @@ class SignalReport(ReportSection):
 
     n_plots = len(signal_names)
     n_cols = 3 if n_plots > 1 else 1
-    n_rows = (n_plots + n_cols - 1) // n_cols
-    n_rows += 1
-    n_params = len(mapping)
-    n_rows = math.ceil(n_params / n_cols)
+    n_rows = math.ceil(n_plots / n_cols)
 
     fig = plt_subplots.make_subplots(
         rows=n_rows,
         cols=n_cols,
-        shared_xaxes=True,
         subplot_titles=signal_names,
-        vertical_spacing=0.5 / n_rows if n_rows > 1 else 0.2,
     )
 
     colors = plt_colors.DEFAULT_PLOTLY_COLORS
@@ -184,12 +179,12 @@ class SignalReport(ReportSection):
 
     fig.update_layout(
         title_text=f"{self._title_prefix} Signals",
-        height=max(400, 220 * n_rows * self._size_factor),
+        height=max(400, 240 * n_rows * self._size_factor),
         autosize=True,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.15, xanchor="center", x=0.5
         ),
-        margin=dict(l=60, r=60, t=150, b=60),
+        margin=dict(l=60, r=60, t=180, b=60),
         template="plotly_white",
         hovermode="x unified",
     )

@@ -214,7 +214,7 @@ class ParameterDistribution(ReportSection):
         rows=n_rows,
         cols=n_cols,
         subplot_titles=subplot_titles,
-        vertical_spacing=0.05,
+        # vertical_spacing=0.05,
         horizontal_spacing=0.02,
     )
 
