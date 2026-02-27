@@ -108,7 +108,6 @@ def generate_video_from_trajectories(
       datas.append(initial_data)
 
       if residual_fn:
-
         res, pred0s, _, state = residual_fn(
             initial_params.as_vector(), initial_params, return_pred_all=True
         )
@@ -124,7 +123,6 @@ def generate_video_from_trajectories(
       datas.append(nominal_data)
 
       if residual_fn:
-
         res, pred0s, _, state = residual_fn(
             nominal_params.as_vector(), nominal_params, return_pred_all=True
         )
@@ -138,8 +136,8 @@ def generate_video_from_trajectories(
       pred_data = mujoco.MjData(pred_model)
       models.append(pred_model)
       datas.append(pred_data)
-      if residual_fn:
 
+      if residual_fn:
         res, pred0s, _, state = residual_fn(
             opt_params.as_vector(), opt_params, return_pred_all=True
         )
@@ -147,9 +145,6 @@ def generate_video_from_trajectories(
 
     control_ts = traj.control.resample(target_dt=models[0].opt.timestep)
     states = np.array(states)
-    # state, _ = mujoco.rollout.rollout(
-    #     models, datas, traj.initial_state, control_ts.data
-    # )
     models[0].vis.global_.fovy = fovy
     models[0].vis.global_.offwidth = width
     models[0].vis.global_.offheight = height

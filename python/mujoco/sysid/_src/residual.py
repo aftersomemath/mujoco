@@ -129,9 +129,10 @@ def construct_ts_from_defaults(
       )
 
     elif obs_type == timeseries.SignalType.MjSensor:
+      sensor_indices = pred_sensordata.signal_mapping[enabled_obs_name][1]
       target_indices = selected_measured_signal_mapping[enabled_obs_name][1]
       predicted_data_out[:, ..., target_indices] = pred_sensordata.data[
-          :, ..., indices
+          :, ..., sensor_indices
       ]
 
     elif (
