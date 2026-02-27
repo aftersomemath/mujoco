@@ -330,6 +330,38 @@ def test_from_custom():
   assert ts.signal_mapping["a"][1].size == 1
   assert ts.signal_mapping["b"][1].size == 2
 
+def test_get_indices():
+  """Tests that signal indices can be retrieved by name."""
+  times = np.linspace(0, 1, 10)
+  data = np.zeros((10, 3))
+  signals = ["a", ("b", 2, SignalType.CustomObs)]
+  ts = TimeSeries.from_custom_map(times, data, signals)
+  type_a, indices_a = ts.get_indices("a")
+  assert type_a == SignalType.CustomObs
+  np.testing.assert_array_equal(indices_a, [0])
+  type_b, indices_b = ts.get_indices("b")
+  assert type_b == SignalType.CustomObs
+  np.testing.assert_array_equal(indices_b, [1, 2])
+  with pytest.raises(ValueError):
+    ts.get_indices("c")
+
+
+def test_slice_by_name():
+  """Tests that slicing by name correctly filters columns and adjusts mapping."""
+  times = np.linspace(0, 1, 10)
+  data = np.zeros((10, 3))
+  data[:, 0] = 1
+  data[:, 1] = 2
+  data[:, 2] = 3
+  signals = ["a", ("b", 2, SignalType.CustomObs)]
+  ts = TimeSeries.from_custom_map(times, data, signals)
+  sliced_ts = TimeSeries.slice_by_name(ts, ["b"])
+  assert list(sliced_ts.signal_mapping.keys()) == ["b"]
+  assert sliced_ts.data.shape == (10, 2)
+  np.testing.assert_array_equal(sliced_ts.signal_mapping["b"][1], [0, 1])
+  np.testing.assert_allclose(sliced_ts.data[:, 0], 2)
+  np.testing.assert_allclose(sliced_ts.data[:, 1], 3)
+
 
 # ---------------------------------------------------------------------------
 # compute_all_state_mappings correctness tests
@@ -451,3 +483,26 @@ def test_state_mapping_ball_plus_hinge():
   </mujoco>
   """
   _verify_state_mapping(mujoco.MjModel.from_xml_string(xml))
+
+
+def test_from_control_names_with_ctrl_in_name():
+  """Tests control name resolution when actuator name contains _ctrl."""
+  xml = """
+  <mujoco>
+    <worldbody>
+      <body>
+        <joint name="j1"/>
+        <geom size="0.1" mass="1"/>
+      </body>
+    </worldbody>
+    <actuator>
+      <motor name="act_ctrl" joint="j1"/>
+    </actuator>
+  </mujoco>
+  """
+  model = mujoco.MjModel.from_xml_string(xml)
+  times = np.linspace(0, 1, 10)
+  data = np.zeros((10, 1))
+  ts = TimeSeries.from_control_names(times, data, model, names=["act_ctrl"])
+  assert "act_ctrl_ctrl" in ts.signal_mapping
+

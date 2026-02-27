@@ -128,10 +128,14 @@ def _resolve_one(
 
   # 2. Control
   if _type_allowed(hint, SignalType.MjCtrl, allowed):
-    base = _strip_suffix(name, "_ctrl")
-    aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR.value, base)
+    if name.endswith("_ctrl"):
+      base = name[: -len("_ctrl")]
+      aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR.value, base)
+      if aid >= 0:
+        return (name, SignalType.MjCtrl, 1)
+    aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR.value, name)
     if aid >= 0:
-      return (base + "_ctrl", SignalType.MjCtrl, 1)
+      return (name + "_ctrl", SignalType.MjCtrl, 1)
 
   # 3. State (qpos/qvel)
   for sig_type in (SignalType.MjStateQPos, SignalType.MjStateQVel):
