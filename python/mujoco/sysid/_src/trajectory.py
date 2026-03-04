@@ -123,6 +123,7 @@ class SystemTrajectory:
       path: pathlib.Path,
       model: mujoco.MjModel,
       allow_missing_sensors: bool = False,
+      allow_missing_controls: bool = True,
   ) -> SystemTrajectory:
     """Load a trajectory from a compressed NumPy archive."""
     with np.load(path, allow_pickle=True) as npz:
@@ -163,10 +164,12 @@ class SystemTrajectory:
         if state_times is not None
         else None,
     )
-    predicted_rollout.check_compatible(allow_missing_sensors)
+    predicted_rollout.check_compatible(allow_missing_sensors, allow_missing_controls)
     return predicted_rollout
 
-  def check_compatible(self, allow_missing_sensors: bool = False) -> None:
+  def check_compatible(self, 
+                       allow_missing_sensors: bool = False,
+                       allow_missing_controls: bool = False,) -> None:
     """Validate that data dimensions match the model.
 
     Checks sensor, control, state, and initial-state dimensions.
@@ -174,6 +177,9 @@ class SystemTrajectory:
     Args:
       allow_missing_sensors: If True, a sensor dimension mismatch is logged as a
         warning instead of raising.
+      allow_missing_controls: If True, a control dimension mismatch is logged as a
+        warning instead of raising.
+
     """
     if self.sensordata.data.shape[1] != self.model.nsensordata:
       if not allow_missing_sensors:
@@ -188,10 +194,17 @@ class SystemTrajectory:
         )
 
     if self.control.data.shape[1] != self.model.nu:
-      raise ValueError(
+      if not allow_missing_controls:
+        raise ValueError(
           f"Control data dimension {self.control.data.shape[1]} does not"
           f" match model control dimension {self.model.nu}"
-      )
+        )
+      else:
+          print(
+            f"Warning: Control data dimension {self.control.data.shape[1]} "
+            f"does not match model control dimension {self.model.nu}"
+        
+          )
 
     state_spec = mujoco.mjtState.mjSTATE_FULLPHYSICS.value
     state_size = mujoco.mj_stateSize(self.model, state_spec)
@@ -415,6 +428,9 @@ class ModelSequences:
     sensordata: Measured sensor TimeSeries for each sequence.
     allow_missing_sensors: Passed through to
       :meth:`SystemTrajectory.check_compatible`.
+    allow_missing_controls: Passed through to
+      :meth:`SystemTrajectory.check_compatible`.
+
   """
 
   def __init__(
@@ -426,10 +442,12 @@ class ModelSequences:
       control: timeseries.TimeSeries | Sequence[timeseries.TimeSeries],
       sensordata: timeseries.TimeSeries | Sequence[timeseries.TimeSeries],
       allow_missing_sensors: bool = False,
+      allow_missing_controls: bool = False,
   ):
     self.name = name
     self.spec = spec
     self.allow_missing_sensors = allow_missing_sensors
+    self.allow_missing_controls = allow_missing_controls
 
     self.gt_model = self.spec.compile()
 
@@ -466,7 +484,8 @@ class ModelSequences:
           state=None,
       )
       measured_rollout_.check_compatible(
-          allow_missing_sensors=allow_missing_sensors
+          allow_missing_sensors=allow_missing_sensors,
+          allow_missing_controls=allow_missing_controls
       )
       self.measured_rollout.append(measured_rollout_)
 
@@ -479,6 +498,8 @@ class ModelSequences:
         self.control[key],
         self.sensordata[key],
         self.allow_missing_sensors,
+        self.allow_missing_controls,
+        
     )
 
 
